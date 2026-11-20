@@ -21,3 +21,4 @@
 19. Username e email serao normalizados antes da busca ou persistencia.
 20. Exclusao fisica de usuarios nao sera implementada nesta microetapa.
 21. Operacoes administrativas de usuario nao serao expostas por HTTP antes da autenticacao.
+22. Username e email devem ter unicidade case-insensitive garantida tambem pelo banco.

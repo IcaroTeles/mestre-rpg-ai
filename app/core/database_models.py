@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, String, func, true
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, String, func, text, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from sqlalchemy.orm import DeclarativeBase
@@ -38,8 +38,8 @@ class User(Base):
     )
 
     __table_args__ = (
-        Index("uq_users_username_normalized", username, unique=True),
-        Index("uq_users_email_normalized", email, unique=True),
+        Index("uq_users_username_normalized", text("lower(username)"), unique=True),
+        Index("uq_users_email_normalized", text("lower(email)"), unique=True),
         CheckConstraint("length(username) >= 3 AND length(username) <= 30", name="ck_users_username_length"),
         CheckConstraint("length(display_name) >= 1 AND length(display_name) <= 80", name="ck_users_display_name_length"),
         CheckConstraint("length(email) >= 3 AND length(email) <= 320", name="ck_users_email_length"),

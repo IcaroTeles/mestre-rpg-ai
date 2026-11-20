@@ -187,3 +187,28 @@
 - Inicializacao real do servidor e rotas existentes.
 - Publicacao da branch microetapa-2.2.
 - Microetapa 2.3 nao iniciada.
+
+## Correcoes apos auditoria da Microetapa 2.2
+
+- **Data:** 2026-11-20
+- **Commit auditado:** `717794830db74295358e9a03c9b95a99f10d4846`
+- **Status:** PRONTO PARA NOVA AUDITORIA
+
+### Correcoes implementadas
+
+- Substituidos os indices convencionais por indices unicos funcionais em `LOWER(username)` e `LOWER(email)`.
+- Atualizado o modelo SQLAlchemy para refletir as expressões funcionais.
+- Atualizada a revisao inicial da tabela users.
+- Criada revisao Alembic corretiva `8e1a4b2c53d7` para bancos ja migrados.
+- O downgrade corretivo restaura indices convencionais antes da retirada da tabela pela revisao base.
+- A fixture de usuarios passou a executar `alembic upgrade head` em banco SQLite temporario.
+- Mantido o teste separado de upgrade/downgrade.
+- Adicionados testes diretos de insercao com `Jogador`/`jogador` e `Mestre@exemplo.com`/`mestre@exemplo.com`.
+- Documentada a limitacao da validacao basica de e-mail; nao foi adicionada dependencia nova.
+
+### Validacao
+
+- Suíte completa: 49 testes aprovados, 0 reprovados.
+- Testes do UserService executados sobre estrutura criada pela migracao real.
+- Insercoes diretas no SQLite rejeitadas para duplicidade case-insensitive.
+- Migração upgrade head e downgrade base validadas em banco temporario.

@@ -46,4 +46,9 @@ FastAPI, Uvicorn, HTTPX, Pydantic Settings, Jinja2 e Pytest.
 - `migrations/versions/20261120_0215_create_users.py`: migracao da tabela users.
 - `tests/test_users.py`: validacoes, unicidade, persistencia, estados e migracao.
 
+## Correcoes da auditoria da Microetapa 2.2
+
+- `migrations/versions/20261120_0235_case_insensitive_users.py`: converte unicidade para indices funcionais de LOWER.
+- `tests/test_users.py`: fixture usa Alembic e inclui insercoes SQLite case-insensitive.
+
 Nenhuma dependencia nova foi necessaria; Pydantic existente valida o formato basico de e-mail.

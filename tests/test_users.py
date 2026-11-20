@@ -21,23 +21,11 @@ from app.core.user_engine.user_service import (
 
 @pytest.fixture
 def database(tmp_path):
-    manager = DatabaseManager(f"sqlite:///{(tmp_path / 'users.db').as_posix()}")
-    with manager.engine.begin() as connection:
-        connection.execute(
-            text(
-                "CREATE TABLE users ("
-                "id CHAR(32) PRIMARY KEY,"
-                "username VARCHAR(30) NOT NULL,"
-                "email VARCHAR(320) NOT NULL,"
-                "display_name VARCHAR(80) NOT NULL,"
-                "is_active BOOLEAN NOT NULL,"
-                "created_at DATETIME NOT NULL,"
-                "updated_at DATETIME NOT NULL,"
-                "CONSTRAINT uq_users_username UNIQUE (username),"
-                "CONSTRAINT uq_users_email UNIQUE (email)"
-                ")"
-            )
-        )
+    database_path = tmp_path / "users.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+    command.upgrade(config, "head")
+    manager = DatabaseManager(f"sqlite:///{database_path.as_posix()}")
     yield manager
     manager.dispose()
 
@@ -205,6 +193,68 @@ def test_database_rejects_duplicate_username(database):
                     is_active=True,
                 )
             )
+
+
+def test_database_rejects_case_insensitive_duplicate_username(database):
+    with database.transaction_scope() as session:
+        session.execute(
+            text(
+                "INSERT INTO users "
+                "(id, username, email, display_name, is_active, created_at, updated_at) "
+                "VALUES (:id, 'Jogador', 'one@example.com', 'Um', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": str(uuid4())},
+        )
+
+    with pytest.raises(IntegrityError):
+        with database.transaction_scope() as session:
+            session.execute(
+                text(
+                    "INSERT INTO users "
+                    "(id, username, email, display_name, is_active, created_at, updated_at) "
+                    "VALUES (:id, 'jogador', 'two@example.com', 'Dois', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {"id": str(uuid4())},
+            )
+
+
+def test_database_rejects_case_insensitive_duplicate_email(database):
+    with database.transaction_scope() as session:
+        session.execute(
+            text(
+                "INSERT INTO users "
+                "(id, username, email, display_name, is_active, created_at, updated_at) "
+                "VALUES (:id, 'one', 'Mestre@exemplo.com', 'Um', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": str(uuid4())},
+        )
+
+    with pytest.raises(IntegrityError):
+        with database.transaction_scope() as session:
+            session.execute(
+                text(
+                    "INSERT INTO users "
+                    "(id, username, email, display_name, is_active, created_at, updated_at) "
+                    "VALUES (:id, 'two', 'mestre@exemplo.com', 'Dois', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {"id": str(uuid4())},
+            )
+
+
+def test_database_has_functional_unique_indexes(database):
+    with database.engine.connect() as connection:
+        indexes = {
+            row[0]: row[1]
+            for row in connection.execute(
+                text(
+                    "SELECT name, sql FROM sqlite_master "
+                    "WHERE type='index' AND name LIKE 'uq_users_%'"
+                )
+            )
+        }
+
+    assert "LOWER(USERNAME)" in indexes["uq_users_username_normalized"].upper()
+    assert "LOWER(EMAIL)" in indexes["uq_users_email_normalized"].upper()
 
 
 def test_user_migration_upgrade_and_downgrade(tmp_path):

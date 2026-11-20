@@ -53,3 +53,4 @@ A aplicacao utiliza FastAPI com lifespan, configuracao centralizada, cliente Oll
 - Repositorio, servico e schemas possuem responsabilidades separadas.
 - Desativacao e reativacao sao operacoes logicas explicitas.
 - A funcionalidade nao contem login, senha, token, convite, permissao ou rota HTTP.
+- A validacao de e-mail usa uma expressao regular basica para formato e normalizacao; nao garante conformidade RFC completa nem existencia da caixa.

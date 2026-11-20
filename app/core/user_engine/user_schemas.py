@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{3,30}$")
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# Validacao basica: nao garante conformidade RFC completa nem existencia da caixa.
 
 
 def normalize_username(value: str) -> str:
