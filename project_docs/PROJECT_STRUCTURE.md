@@ -26,6 +26,13 @@
 
 ## Dependencias
 
+## Auditoria da Microetapa 2.1
+
+- `app/core/database.py`: corrigido para usar SQLAlchemy URL parsing, SQLite PRAGMA por conexao, WAL em disco, StaticPool em memoria e ciclos de sessao com rollback.
+- `app/main.py`: `/api/health` passou a ser uma rota sincronizada curta e a reportar banco degradado sem alterar o estado de Ollama.
+- `migrations/env.py`: aceita URL temporaria definida pelo Alembic, mantendo a configuracao central como fallback.
+- `tests/test_database.py`: ampliado para cobrir rollback, commit, isolamento, indisponibilidade, pragmas, WAL, diretorios e Alembic.
+
 SQLAlchemy 2.x e Alembic foram adicionados na Microetapa 2.1.
 
 FastAPI, Uvicorn, HTTPX, Pydantic Settings, Jinja2 e Pytest.

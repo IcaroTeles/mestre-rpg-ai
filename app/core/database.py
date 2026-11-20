@@ -4,8 +4,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -15,16 +16,26 @@ class DatabaseManager:
 
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
+        url = make_url(database_url)
+        is_sqlite_memory = url.database in (None, "", ":memory:")
 
-        if database_url.startswith("sqlite:"):
+        if url.get_backend_name() == "sqlite" and not is_sqlite_memory:
             self._ensure_sqlite_directory(database_url)
 
-        connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+        connect_args = {"check_same_thread": False} if url.get_backend_name() == "sqlite" else {}
         engine_options: dict = {"connect_args": connect_args}
-        if database_url in ("sqlite://", "sqlite:///:memory:", "sqlite+pysqlite:///:memory:"):
+        if is_sqlite_memory and url.get_backend_name() == "sqlite":
             engine_options["poolclass"] = StaticPool
 
         self.engine: Engine = create_engine(database_url, **engine_options)
+        if url.get_backend_name() == "sqlite":
+            self._configure_sqlite_connection()
+            if not is_sqlite_memory:
+                try:
+                    with self.engine.begin() as connection:
+                        connection.execute(text("PRAGMA journal_mode=WAL"))
+                except Exception:
+                    pass
         self.session_factory = sessionmaker(
             bind=self.engine,
             autoflush=False,
@@ -33,16 +44,18 @@ class DatabaseManager:
 
     @staticmethod
     def _ensure_sqlite_directory(database_url: str) -> None:
-        if database_url in ("sqlite://", "sqlite:///:memory:", "sqlite+pysqlite:///:memory:"):
-            return
+        database_path = make_url(database_url).database
+        if database_path:
+            Path(database_path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
 
-        prefix = "sqlite:///"
-        if database_url.startswith(prefix):
-            raw_path = database_url[len(prefix):]
-            if raw_path.startswith("/") and len(raw_path) >= 3 and raw_path[2] == ":":
-                raw_path = raw_path[1:]
-            if raw_path and not raw_path.startswith(":"):
-                Path(raw_path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
+    def _configure_sqlite_connection(self) -> None:
+        @event.listens_for(self.engine, "connect")
+        def set_sqlite_pragmas(dbapi_connection, connection_record) -> None:
+            del connection_record
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.close()
 
     def get_session(self) -> Session:
         """Abre uma nova sessao independente."""
@@ -51,11 +64,29 @@ class DatabaseManager:
 
     @contextmanager
     def session_scope(self) -> Iterator[Session]:
-        """Fornece uma sessao com encerramento garantido."""
+        """Fornece uma sessao somente leitura sem commits automaticos."""
 
         session = self.get_session()
         try:
             yield session
+            session.rollback()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    @contextmanager
+    def transaction_scope(self) -> Iterator[Session]:
+        """Executa uma transacao com commit explicito em caso de sucesso."""
+
+        session = self.get_session()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
         finally:
             session.close()
 

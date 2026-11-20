@@ -94,3 +94,58 @@
 
 - Nenhuma pendencia da Microetapa 2.1.
 - Microetapa 2.2 nao iniciada.
+
+## Auditoria tecnica da Microetapa 2.1
+
+- **Data:** 2026-11-20
+- **Status:** CONCLUIDA
+- **Resultado:** APROVADA PARA MERGE, sujeita a existencia segura da branch destino.
+
+### Problemas encontrados e classificacao
+
+- **Media:** `session_scope()` fechava a sessao mas nao implementava rollback ou separacao explicita entre leitura e escrita.
+- **Media:** falta de transacao transacional com commit explicito e rollback.
+- **Media:** ausencia de PRAGMA foreign keys e busy_timeout por conexao.
+- **Baixa:** falta de estrategia WAL para banco SQLite em disco.
+- **Media:** `/api/health` executava SQLAlchemy em handler assincrono.
+- **Alta para operacoes futuras:** Alembic ignorava uma URL temporaria fornecida pela configuracao de migracao.
+- **Media:** cobertura insuficiente para falhas de conexao, excecoes, isolamento e descarte do engine.
+- **Baixa:** configuracao do Alembic emitia aviso de path separator.
+
+### Correcoes realizadas
+
+- `session_scope()` passou a operar sem commit automatico, com rollback e encerramento garantido.
+- Adicionado `transaction_scope()` com commit em sucesso e rollback em excecao.
+- SQLAlchemy passou a ativar foreign keys, busy timeout e, em disco, WAL.
+- Banco em memoria continua com StaticPool e nao ativa WAL.
+- `/api/health` passou a ser sincronizado e reporta banco degradado sem expor detalhes internos.
+- Alembic passou a respeitar uma URL fornecida em `Config`; usa a URL central apenas como fallback.
+- Adicionado `path_separator = os` ao `alembic.ini`.
+- Ampliados testes de memoria, disco, diretorios, sessoes, rollback, commit, isolamento, indisponibilidade, pragmas e Alembic.
+
+### Validacao
+
+- Suíte ampliada: 21 testes aprovados, 0 reprovados.
+- Python 3.12.10 no Windows validado.
+- `alembic current` executado sem alterar dados.
+- Servidor iniciado com `python run.py`.
+- `GET /` respondeu HTTP 200.
+- `GET /api/health` respondeu status geral `ok` e banco `ok`.
+- `GET /api/health` com banco indisponivel foi testado como `degraded`.
+- `/api/health/ollama` manteve o estado separado e funcional.
+- Inspecao SQLite confirmou que nenhuma tabela de negocio foi criada.
+
+### Decisoes tecnicas
+
+- Read-only e escritas possuem ciclos separados para evitar commits implicitos.
+- PRAGMA foreign_keys e busy_timeout sao aplicados em toda conexao SQLite.
+- WAL e aplicado apenas em banco em disco.
+- Falhas de banco sao ocultadas no endpoint e representadas por estado degradado.
+- Nenhuma migracao funcional foi criada.
+
+### Operacoes Git
+
+- Auditoria realizada na branch `microetapa-2.1`.
+- Nenhum comando destrutivo ou force push utilizado.
+- Branch destino solicitada `V.01` nao existe localmente nem no remoto neste momento.
+- Merge ainda nao realizado ate decisao sobre a criacao ou nome correto da baseline destino.

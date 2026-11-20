@@ -33,3 +33,14 @@ A aplicacao utiliza FastAPI com lifespan, configuracao centralizada, cliente Oll
 - Configuracoes sao carregadas por variaveis de ambiente e `.env`.
 - Logs sao escritos em `data/logs/app.log`.
 - A estrutura YAML em `configuration/settings.example.yaml` serve como referencia; nesta etapa o carregamento efetivo usa Pydantic Settings e `.env`.
+
+## Auditoria e decisoes da Microetapa 2.1
+
+- SQLite utiliza SQLAlchemy 2.x com um engine independente da camada HTTP.
+- O banco usa `check_same_thread=False` em SQLite para compatibilidade assincrona.
+- Conexoes SQLite ativam `PRAGMA foreign_keys=ON` e `PRAGMA busy_timeout=5000`.
+- Bancos em disco usam WAL; bancos em memoria nao usam WAL.
+- Existe um contexto somente leitura sem commit automatico e um contexto transacional explicito com commit ou rollback.
+- A verificacao de banco da API usa uma rota sincronizada curta, sem bloquear o loop com tarefas extensas.
+- O estado geral fica degradado quando o banco obrigatorio estiver indisponivel; Ollama permanece reportado separadamente.
+- Alembic reutiliza a URL central do projeto ou uma URL temporaria fornecida pelo teste.

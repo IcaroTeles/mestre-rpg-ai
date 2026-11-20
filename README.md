@@ -71,3 +71,9 @@ Para verificar o banco sem criar tabelas:
 ```
 
 Nesta versao nao existem tabelas de usuarios, campanhas ou permissoes.
+
+## Semantica das sessoes
+
+- `session_scope()` e destinado a leitura e nao realiza commit.
+- `transaction_scope()` realiza commit apos sucesso e rollback apos excecao.
+- Conexoes SQLite ativam integridade de chaves estrangeiras e timeout de espera.

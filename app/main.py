@@ -89,10 +89,10 @@ async def index(request: Request):
 
 
 @app.get("/api/health")
-async def health() -> dict:
+def health() -> dict:
     database_available = database.check_available()
     return {
-        "status": "ok",
+        "status": "ok" if database_available else "degraded",
         "application": settings.app_name,
         "version": settings.app_version,
         "environment": settings.environment,
