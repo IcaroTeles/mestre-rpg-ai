@@ -12,7 +12,9 @@ O Mestre RPG AI sera uma aplicacao web de RPG conduzida por IA, iniciada sobre D
 - Pydantic Settings
 - HTML, CSS e JavaScript
 - Pytest
-- SQLite apenas em etapas futuras
+- SQLite
+- SQLAlchemy 2.x
+- Alembic
 
 ## Separacao das IAs
 

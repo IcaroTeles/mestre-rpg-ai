@@ -10,3 +10,6 @@
 8. Nao antecipar funcionalidades de etapas futuras.
 9. Preservar compatibilidade entre modulos.
 10. Priorizar codigo modular, seguro e testavel.
+11. A infraestrutura de banco sera independente da API e nao sera exposta diretamente.
+12. Migracoes SQLite serao revisadas e nao devem ser destrutivas.
+13. Nao criar entidades de usuarios, campanhas ou permissoes antes da microetapa correspondente.

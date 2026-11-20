@@ -45,3 +45,52 @@
 
 - Nenhuma pendencia da Etapa 1.
 - Etapa 2 nao iniciada.
+
+## Microetapa 2.1 - Infraestrutura do banco de dados
+
+- **Data:** 2026-11-20
+- **Status:** CONCLUIDA
+- **Objetivos:** criar infraestrutura inicial SQLite, SQLAlchemy e Alembic sem modelos ou endpoints de dados.
+
+### Implementacao
+
+- Criado `app/core/database.py` com engine SQLAlchemy, sessao, contexto de fechamento e consulta de disponibilidade.
+- Criada `app/core/database_models.py` com uma base Declarative vazia.
+- Criado `alembic.ini` e o pacote `migrations/`, sem revisoes ou tabelas.
+- Adicionado caminho configuravel para `data/mestre_rpg.db`, com criacao automatica do diretorio.
+- `/api/health` passou a informar o estado do banco como `ok` ou `degraded`, sem impedir o servidor.
+- Nenhuma tabela de usuario, campanha, autenticacao ou permissao foi criada.
+- O comportamento de Ollama permaneceu separado e sem alteracoes.
+
+### Dependencias adicionadas
+
+- SQLAlchemy >=2.0,<3.0
+- Alembic >=1.14,<2.0
+
+### Validacao
+
+- Resultado de `pytest -v`: 10 testes aprovados, 0 falhas.
+- Testes de banco em memoria, banco temporario em disco e gerenciamento de sessao aprovados.
+- `alembic current` confirmou o contexto SQLite.
+- `alembic history` confirmou a configuracao sem revisoes criadas.
+- Servidor iniciado com `python run.py` em `127.0.0.1:8000`.
+- `GET /` respondeu HTTP 200.
+- `GET /api/health` respondeu status geral `ok` e banco `ok`.
+- `GET /api/health/ollama` permaneceu funcional.
+- Arquivo SQLite criado em `data/mestre_rpg.db`.
+
+### Erros encontrados e solucoes
+
+- A primeira versao do teste esperava que `Session.is_active` fosse falso apos fechamento; o comportamento observado mostrou que essa propriedade nao representa o fechamento. O teste foi corrigido para usar `session_scope()` e verificar encerramento da transacao.
+
+### Decisoes tecnicas
+
+- SQLAlchemy usa URL SQLite configuravel e URL relativa ao projeto por padrao.
+- Em banco temporario, strings `sqlite:///:memory:` usam pool adequado.
+- Alembic reutiliza a configuracao central da aplicacao.
+- Nenhuma migracao foi criada ou aplicada porque esta microetapa nao possui tabelas.
+
+### Pendencias
+
+- Nenhuma pendencia da Microetapa 2.1.
+- Microetapa 2.2 nao iniciada.

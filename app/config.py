@@ -34,10 +34,22 @@ class Settings(BaseSettings):
     knowledge_base_dir: Path = PROJECT_ROOT / "data" / "knowledge_base"
     uploads_dir: Path = PROJECT_ROOT / "data" / "uploads"
     log_dir: Path = PROJECT_ROOT / "data" / "logs"
+    database_dir: Path = PROJECT_ROOT / "data"
+    database_filename: str = "mestre_rpg.db"
+    database_url: str | None = None
 
     @property
     def ollama_api_url(self) -> str:
         return self.ollama_url.rstrip("/")
+
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        if self.database_url:
+            return self.database_url
+
+        self.database_dir.mkdir(parents=True, exist_ok=True)
+        database_path = (self.database_dir / self.database_filename).resolve()
+        return f"sqlite:///{database_path.as_posix()}"
 
 
 @lru_cache
