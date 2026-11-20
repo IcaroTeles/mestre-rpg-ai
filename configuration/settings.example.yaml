@@ -16,3 +16,4 @@ database:
   filename: mestre_rpg.db
   session_duration_hours: 12
   trusted_origins: []
+  invite_validity_hours: 48

@@ -26,3 +26,6 @@
 24. Tokens de sessao serao armazenados somente como hash e entregues por cookie HttpOnly.
 25. Operacoes de estado autenticadas exigirao CSRF e validacao de origem.
 26. Login nao fara enumeração de contas ou exposicao de detalhes criptograficos.
+27. Convites armazenarao somente hash do token e nunca serao reutilizaveis apos consumo.
+28. Convites nao poderao atribuir privilegios administrativos.
+29. Cadastro por convite e consumo serao transacionais.

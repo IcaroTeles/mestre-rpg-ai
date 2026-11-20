@@ -78,3 +78,48 @@ class UserSession(Base):
         Index("uq_user_sessions_token_hash", token_hash, unique=True),
         Index("ix_user_sessions_user_id", user_id),
     )
+
+
+class UserInvite(Base):
+    """Convite individual e de uso unico para ingresso de jogador."""
+
+    __tablename__ = "user_invites"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_by_user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    used_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False, default="player")
+    campaign_id: Mapped[UUID | None] = mapped_column(nullable=True)
+
+    __table_args__ = (
+        Index("uq_user_invites_token_hash", token_hash, unique=True),
+        Index("ix_user_invites_created_by_user_id", created_by_user_id),
+        Index("ix_user_invites_used_by_user_id", used_by_user_id),
+        Index("ix_user_invites_expires_at", expires_at),
+        CheckConstraint("purpose = 'player'", name="ck_user_invites_player_purpose"),
+    )

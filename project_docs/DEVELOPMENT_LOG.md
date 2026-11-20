@@ -191,7 +191,6 @@
 ## Microetapa 2.3 - Autenticacao e sessoes
 
 - **Data:** 2026-11-20
-- **Status:** EM ANDAMENTO
 - **Status:** PRONTO PARA AUDITORIA
 - **Branch:** microetapa-2.3
 - **Baseline:** v0.1 em 9535c1443ea438981829f07f769be6b9ecdd04fc ou descendente autorizado.
@@ -272,3 +271,33 @@
 - Bancos ja existentes aplicam a revisao corretiva sem alterar dados.
 - Dados conflitantes fazem a conversao falhar antes da substituicao dos indices e sem apagar registros.
 - Testes cobrem upgrade intermediario, preservacao de dados, indices funcionais, downgrade/reupgrade e falha segura.
+
+## Microetapa 2.4 - Convites individuais
+
+- **Data:** 2026-11-20
+- **Branch:** microetapa-2.4
+- **Status:** PRONTO PARA AUDITORIA
+- **Baseline:** v0.1 em f1c6084ac1d03ee85980aa6d1c44a7add9b8e228
+
+### Implementacao
+
+- Criado modelo `UserInvite` com token hash, validade, estados, criador e usuario utilizado.
+- Criado campo opcional `campaign_id` sem chave estrangeira ou tabela de campanha.
+- Criado motor interno de convites com criação, consulta, revogação e aceite.
+- Aceite cria usuário, define senha Argon2id e consume o convite na mesma transação.
+- Adicionado endpoint publico protegido por origem `POST /api/invites/accept`.
+- Criacao e consulta administrativa permanecem fora de endpoints nesta etapa.
+
+### Configuracao
+
+- Validade padrao de convites: 48 horas por `INVITE_VALIDITY_HOURS`.
+
+### Migracao
+
+- Criada revisao 4a7c2e1d9f60, descendente de 9c41d7e2a8f5.
+- Migração cria tabela, índices e chaves estrangeiras de convite.
+
+### Pendencias
+
+- Auditoria técnica da Microetapa 2.4.
+- Microetapa 2.5 nao iniciada.
