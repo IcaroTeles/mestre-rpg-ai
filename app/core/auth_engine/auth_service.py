@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from pwdlib import PasswordHash
+from functools import lru_cache
 
 from app.core.auth_engine.auth_repository import AuthRepository
 from app.core.database import DatabaseManager
@@ -36,14 +37,24 @@ class PasswordValidationError(AuthError):
     pass
 
 
+@lru_cache(maxsize=1)
+def get_password_hasher() -> PasswordHash:
+    return PasswordHash.recommended()
+
+
+@lru_cache(maxsize=1)
+def get_dummy_password_hash() -> str:
+    return get_password_hasher().hash(
+        "Dummy-Argon2-Password-For-Timing-Only-2.3"
+    )
+
+
 class AuthService:
     def __init__(self, database: DatabaseManager, session_duration_hours: int = 12) -> None:
         self.database = database
         self.session_duration_hours = session_duration_hours
-        self.password_hasher = PasswordHash.recommended()
-        self.dummy_password_hash = self.password_hasher.hash(
-            "Dummy-Argon2-Password-For-Timing-Only-2.3"
-        )
+        self.password_hasher = get_password_hasher()
+        self.dummy_password_hash = get_dummy_password_hash()
 
     @staticmethod
     def _hash_token(token: str) -> str:

@@ -1,6 +1,7 @@
 """Testes de autenticacao, sessoes e cookies."""
 
 import sqlite3
+from unittest.mock import Mock, patch
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -19,6 +20,7 @@ from app.core.auth_engine.auth_service import (
 )
 from app.core.database import DatabaseManager
 from app.core.database_models import User
+from app.core.auth_engine import auth_service as auth_service_module
 from app.core.user_engine.user_schemas import UserCreate
 from app.core.user_engine.user_service import UserService
 from app.main import app
@@ -102,6 +104,31 @@ def test_missing_account_uses_dummy_argon2_verification(auth):
     assert auth.dummy_password_hash.startswith("$argon2")
     with pytest.raises(InvalidCredentialsError):
         auth.authenticate("conta-inexistente", "SenhaSegura123")
+
+
+def test_dummy_password_hash_is_computed_once_per_process(database):
+    auth_service_module.get_password_hasher.cache_clear()
+    auth_service_module.get_dummy_password_hash.cache_clear()
+    mock_hasher = Mock()
+    mock_hasher.hash.return_value = "$argon2dummy"
+    mock_hasher.verify.return_value = False
+
+    try:
+        with patch.object(
+            auth_service_module.PasswordHash,
+            "recommended",
+            return_value=mock_hasher,
+        ):
+            first = AuthService(database, 12)
+            second = AuthService(database, 12)
+
+            assert first.dummy_password_hash == "$argon2dummy"
+            assert second.dummy_password_hash == "$argon2dummy"
+            assert first.dummy_password_hash == second.dummy_password_hash
+            mock_hasher.hash.assert_called_once()
+    finally:
+        auth_service_module.get_password_hasher.cache_clear()
+        auth_service_module.get_dummy_password_hash.cache_clear()
 
 
 def test_login_without_password(auth, user):

@@ -231,6 +231,12 @@
 - Desenvolvimento local aceita origens locais padrao; producao exige `TRUSTED_ORIGINS`.
 - Login de conta inexistente ou sem senha executa verificacao Argon2 ficticia para reduzir diferencas temporais.
 
+### Correcao pos-auditoria de desempenho
+
+- O PasswordHash recomendado e o hash Argon2 ficticio sao reutilizados por processo com cache lru_cache.
+- Novas instancias de AuthService nao recalculam o hash ficticio.
+- Contas inexistentes, inativas ou sem senha continuam executando uma verificacao ficticia.
+
 ## Correcoes apos auditoria da Microetapa 2.2
 
 - **Data:** 2026-11-20
