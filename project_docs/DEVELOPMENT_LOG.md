@@ -148,3 +148,6 @@
 - Auditoria realizada na branch `microetapa-2.1`.
 - Nenhum comando destrutivo ou force push utilizado.
 - A branch destino correta foi confirmada como `v0.1`; nao existe branch `V.01`.
+- Commit de origem da Microetapa 2.1: `1eba1fc`.
+- Commit final da auditoria antes do merge: `fda2d07`.
+- Integracao validada em `v0.1` pelo commit de merge `b8a0fe2`.
