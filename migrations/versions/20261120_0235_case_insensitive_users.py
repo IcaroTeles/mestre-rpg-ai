@@ -17,6 +17,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    duplicate_username = bind.exec_driver_sql(
+        "SELECT LOWER(username) FROM users "
+        "GROUP BY LOWER(username) HAVING COUNT(*) > 1 LIMIT 1"
+    ).first()
+    if duplicate_username is not None:
+        raise RuntimeError("Migracao interrompida: usernames preexistentes divergem apenas por maiusculas/minusculas")
+
+    duplicate_email = bind.exec_driver_sql(
+        "SELECT LOWER(email) FROM users "
+        "GROUP BY LOWER(email) HAVING COUNT(*) > 1 LIMIT 1"
+    ).first()
+    if duplicate_email is not None:
+        raise RuntimeError("Migracao interrompida: emails preexistentes divergem apenas por maiusculas/minusculas")
+
     op.execute("DROP INDEX IF EXISTS uq_users_username_normalized")
     op.execute("DROP INDEX IF EXISTS uq_users_email_normalized")
     op.execute("CREATE UNIQUE INDEX uq_users_username_normalized ON users (LOWER(username))")

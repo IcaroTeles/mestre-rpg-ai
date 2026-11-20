@@ -1,5 +1,6 @@
 """Testes da camada interna de usuarios."""
 
+import sqlite3
 from uuid import uuid4
 
 import pytest
@@ -287,3 +288,157 @@ def test_user_migration_upgrade_and_downgrade(tmp_path):
     ]
     connection.close()
     assert "users" not in table_names
+
+
+def test_new_database_migrates_directly_to_case_insensitive_indexes(tmp_path):
+    database_path = tmp_path / "new_database.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+
+    command.upgrade(config, "base")
+    command.upgrade(config, "head")
+
+    connection = sqlite3.connect(database_path)
+    indexes = dict(
+        connection.execute(
+            "SELECT name, sql FROM sqlite_master "
+            "WHERE type='index' AND name LIKE 'uq_users_%'"
+        ).fetchall()
+    )
+    connection.close()
+
+    assert "LOWER(USERNAME)" in indexes["uq_users_username_normalized"].upper()
+    assert "LOWER(EMAIL)" in indexes["uq_users_email_normalized"].upper()
+
+
+def test_existing_database_upgrade_preserves_data_and_converts_indexes(tmp_path):
+    database_path = tmp_path / "existing_database.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+
+    command.upgrade(config, "7dce4f9a21b1")
+
+    connection = sqlite3.connect(database_path)
+    connection.execute(
+        "INSERT INTO users "
+        "(id, username, email, display_name, is_active, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        (str(uuid4()), "Jogador", "Mestre@exemplo.com", "Mestre", 1),
+    )
+    connection.commit()
+    connection.close()
+
+    command.upgrade(config, "head")
+
+    connection = sqlite3.connect(database_path)
+    preserved = connection.execute(
+        "SELECT username, email FROM users"
+    ).fetchone()
+    indexes = dict(
+        connection.execute(
+            "SELECT name, sql FROM sqlite_master "
+            "WHERE type='index' AND name LIKE 'uq_users_%'"
+        ).fetchall()
+    )
+    connection.close()
+
+    assert preserved == ("Jogador", "Mestre@exemplo.com")
+    assert "LOWER(USERNAME)" in indexes["uq_users_username_normalized"].upper()
+    assert "LOWER(EMAIL)" in indexes["uq_users_email_normalized"].upper()
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            "INSERT INTO users "
+            "(id, username, email, display_name, is_active, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            (str(uuid4()), "jogador", "outro@example.com", "Outro", 1),
+        )
+        connection.commit()
+    except sqlite3.IntegrityError:
+        connection.close()
+    else:
+        connection.close()
+        raise AssertionError("Duplicidade case-insensitive de username foi aceita")
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            "INSERT INTO users "
+            "(id, username, email, display_name, is_active, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            (str(uuid4()), "outro", "mestre@exemplo.com", "Outro", 1),
+        )
+        connection.commit()
+    except sqlite3.IntegrityError:
+        connection.close()
+    else:
+        connection.close()
+        raise AssertionError("Duplicidade case-insensitive de email foi aceita")
+
+
+def test_migration_downgrade_and_reupgrade_restore_expected_indexes(tmp_path):
+    database_path = tmp_path / "round_trip.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+
+    command.upgrade(config, "head")
+    command.downgrade(config, "7dce4f9a21b1")
+
+    connection = sqlite3.connect(database_path)
+    indexes = dict(
+        connection.execute(
+            "SELECT name, sql FROM sqlite_master "
+            "WHERE type='index' AND name LIKE 'uq_users_%'"
+        ).fetchall()
+    )
+    connection.close()
+
+    assert "LOWER(USERNAME)" not in indexes["uq_users_username_normalized"].upper()
+    assert "LOWER(EMAIL)" not in indexes["uq_users_email_normalized"].upper()
+
+    command.upgrade(config, "head")
+
+    connection = sqlite3.connect(database_path)
+    indexes = dict(
+        connection.execute(
+            "SELECT name, sql FROM sqlite_master "
+            "WHERE type='index' AND name LIKE 'uq_users_%'"
+        ).fetchall()
+    )
+    connection.close()
+
+    assert "LOWER(USERNAME)" in indexes["uq_users_username_normalized"].upper()
+    assert "LOWER(EMAIL)" in indexes["uq_users_email_normalized"].upper()
+
+
+def test_migration_case_insensitive_conflict_fails_without_changing_data(tmp_path):
+    database_path = tmp_path / "conflicting_database.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+
+    command.upgrade(config, "7dce4f9a21b1")
+
+    connection = sqlite3.connect(database_path)
+    connection.executemany(
+        "INSERT INTO users "
+        "(id, username, email, display_name, is_active, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        [
+            (str(uuid4()), "Jogador", "one@example.com", "Um", 1),
+            (str(uuid4()), "jogador", "two@example.com", "Dois", 1),
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    with pytest.raises(RuntimeError, match="Migracao interrompida"):
+        command.upgrade(config, "head")
+
+    connection = sqlite3.connect(database_path)
+    rows = connection.execute(
+        "SELECT username FROM users ORDER BY username"
+    ).fetchall()
+    connection.close()
+
+    assert rows == [("Jogador",), ("jogador",)]

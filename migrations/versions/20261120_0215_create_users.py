@@ -32,8 +32,8 @@ def upgrade() -> None:
         sa.CheckConstraint("length(email) >= 3 AND length(email) <= 320", name="ck_users_email_length"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.execute("CREATE UNIQUE INDEX uq_users_username_normalized ON users (LOWER(username))")
-    op.execute("CREATE UNIQUE INDEX uq_users_email_normalized ON users (LOWER(email))")
+    op.create_index("uq_users_username_normalized", "users", ["username"], unique=True)
+    op.create_index("uq_users_email_normalized", "users", ["email"], unique=True)
 
 
 def downgrade() -> None:

@@ -212,3 +212,14 @@
 - Testes do UserService executados sobre estrutura criada pela migracao real.
 - Insercoes diretas no SQLite rejeitadas para duplicidade case-insensitive.
 - Migração upgrade head e downgrade base validadas em banco temporario.
+
+## Correcao final do historico Alembic da Microetapa 2.2
+
+- **Data:** 2026-11-20
+- **Status:** PRONTO PARA NOVA AUDITORIA
+- A revisao original `7dce4f9a21b1` foi restaurada com indices convencionais.
+- A revisao `8e1a4b2c53d7` permanece como conversao para indices funcionais LOWER.
+- Bancos novos chegam diretamente ao estado head com unicidade case-insensitive.
+- Bancos ja existentes aplicam a revisao corretiva sem alterar dados.
+- Dados conflitantes fazem a conversao falhar antes da substituicao dos indices e sem apagar registros.
+- Testes cobrem upgrade intermediario, preservacao de dados, indices funcionais, downgrade/reupgrade e falha segura.
