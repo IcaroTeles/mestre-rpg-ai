@@ -1,6 +1,7 @@
 """Endpoints internos de autenticacao por sessao persistente."""
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response
+from urllib.parse import urlsplit
 
 from app.core.auth_engine.auth_dependencies import get_authenticated_user, get_auth_service
 from app.core.auth_engine.auth_schemas import AuthUser, LoginRequest, LoginResponse, SessionIdentity
@@ -16,11 +17,12 @@ CSRF_COOKIE = "mestre_csrf"
 
 
 def validate_origin(request: Request) -> None:
-    origin = request.headers.get("origin")
-    if origin is None:
-        return
     expected = str(request.base_url).rstrip("/")
-    if origin.rstrip("/") != expected:
+    supplied = request.headers.get("origin")
+    if supplied is None:
+        referer = request.headers.get("referer")
+        supplied = f"{urlsplit(referer).scheme}://{urlsplit(referer).netloc}" if referer else None
+    if supplied is not None and supplied.rstrip("/") != expected:
         raise HTTPException(status_code=403, detail="Origem nao autorizada")
 
 
