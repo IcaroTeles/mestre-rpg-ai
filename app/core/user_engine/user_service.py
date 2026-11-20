@@ -35,6 +35,34 @@ class UserService:
     def __init__(self, database: DatabaseManager) -> None:
         self.database = database
 
+    def create_in_session(self, session, data: UserCreate | dict) -> User:
+        """Valida e cria um usuario usando a sessao fornecida."""
+
+        try:
+            data = UserCreate.model_validate(data)
+        except ValidationError as exc:
+            raise UserValidationError("Dados de usuario invalidos") from exc
+
+        repository = UserRepository(session)
+        if repository.get_by_username(data.username):
+            raise UserConflictError("Nome de usuario ja esta em uso")
+        if repository.get_by_email(data.email):
+            raise UserConflictError("E-mail ja esta em uso")
+
+        user = User(
+            id=uuid4(),
+            username=data.username,
+            email=data.email,
+            display_name=data.display_name,
+            is_active=True,
+        )
+        repository.add(user)
+        try:
+            session.flush()
+        except IntegrityError as exc:
+            raise UserConflictError("Nome de usuario ou e-mail ja esta em uso") from exc
+        return user
+
     def create(self, data: UserCreate | dict) -> UserOutput:
         try:
             data = UserCreate.model_validate(data)

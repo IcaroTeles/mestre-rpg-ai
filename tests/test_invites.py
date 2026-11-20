@@ -1,0 +1,512 @@
+"""Testes da Microetapa 2.4 de convites."""
+
+import sqlite3
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+
+import pytest
+from alembic import command
+from alembic.config import Config
+from fastapi.testclient import TestClient
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+
+from app.core.auth_engine.auth_service import AuthService
+from app.core.database import DatabaseManager
+from app.core.database_models import User, UserInvite
+from app.core.invite_engine.invite_schemas import AcceptInviteRequest
+from app.core.invite_engine.invite_service import (
+    InviteExpiredError,
+    InviteRevokedError,
+    InviteUnauthorizedError,
+    InviteUsedError,
+    InviteService,
+)
+from app.core.user_engine.user_schemas import UserCreate
+from app.core.user_engine.user_service import UserService
+from app.main import app
+
+
+@pytest.fixture
+def database(tmp_path):
+    database_path = tmp_path / "invites.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+    command.upgrade(config, "head")
+    manager = DatabaseManager(f"sqlite:///{database_path.as_posix()}")
+    yield manager
+    manager.dispose()
+
+
+@pytest.fixture
+def creator(database):
+    return UserService(database).create(
+        UserCreate(
+            username="administrador",
+            email="admin@example.com",
+            display_name="Administrador",
+        )
+    )
+
+
+@pytest.fixture
+def invite_service(database):
+    return InviteService(database, validity_hours=48)
+
+
+def test_create_invite_valid_default_and_hash(database, invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+
+    assert len(created.token) >= 43
+    assert created.invite.created_by_user_id == creator.id
+    assert created.invite.used_at is None
+    assert created.invite.revoked_at is None
+    assert created.invite.purpose == "player"
+    assert created.invite.expires_at > created.invite.created_at
+    assert created.invite.expires_at - created.invite.created_at >= timedelta(hours=47)
+
+    with database.session_scope() as session:
+        row = session.execute(
+            text("SELECT token_hash FROM user_invites")
+        ).one()
+    assert row.token_hash != created.token
+    assert len(row.token_hash) == 64
+
+
+def test_create_invite_custom_validity(database, invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+        validity_hours=12,
+    )
+    assert created.invite.expires_at - created.invite.created_at >= timedelta(hours=11)
+
+
+def test_create_invite_requires_explicit_authorization(invite_service, creator):
+    with pytest.raises(InviteUnauthorizedError):
+        invite_service.create_invite(
+            creator.id,
+            authorized_as_administrator=False,
+        )
+
+    with pytest.raises(InviteUnauthorizedError):
+        invite_service.list_invites(authorized_as_administrator=False)
+
+
+def test_admin_invite_operations_have_no_public_http_routes():
+    with TestClient(app) as client:
+        paths = set(client.get("/openapi.json").json()["paths"])
+    assert "/api/invites/accept" in paths
+    assert "/api/invites" not in paths
+    assert "/api/invites/create" not in paths
+    assert "/api/invites/revoke" not in paths
+
+
+def test_accept_invite_creates_password_user_and_session(database, invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+
+    user, session_token, csrf_token = invite_service.accept_invite(
+        AcceptInviteRequest(
+            token=created.token,
+            username="JogadorNovo",
+            email="Jogador@Exemplo.com",
+            display_name="Jogador Novo",
+            password="SenhaSegura123",
+        )
+    )
+
+    assert user.username == "jogadornovo"
+    assert user.email == "jogador@exemplo.com"
+    assert session_token
+    assert csrf_token
+
+    with database.session_scope() as session:
+        row = session.get(User, user.id)
+        invite_row = session.get(UserInvite, created.invite.id)
+        assert row is not None
+        password_hash = row.password_hash
+        is_active = row.is_active
+        used_at = invite_row.used_at
+        used_by_user_id = invite_row.used_by_user_id
+
+    assert password_hash.startswith("$argon2")
+    assert is_active is True
+    assert used_at is not None
+    assert used_by_user_id == user.id
+
+
+def test_accept_invite_reuses_user_and_auth_services(monkeypatch, invite_service, creator):
+    calls = []
+    original_create = invite_service.user_service.create_in_session
+    original_password = invite_service.auth_service.set_password_in_session
+    original_session = invite_service.auth_service.create_session
+
+    def tracked_create(session, data):
+        calls.append("user_create")
+        return original_create(session, data)
+
+    def tracked_password(session, user, password):
+        calls.append("set_password")
+        return original_password(session, user, password)
+
+    def tracked_session(user_id):
+        calls.append("create_session")
+        return original_session(user_id)
+
+    monkeypatch.setattr(invite_service.user_service, "create_in_session", tracked_create)
+    monkeypatch.setattr(invite_service.auth_service, "set_password_in_session", tracked_password)
+    monkeypatch.setattr(invite_service.auth_service, "create_session", tracked_session)
+
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+    invite_service.accept_invite(
+        AcceptInviteRequest(
+            token=created.token,
+            username="ServicoIntegrado",
+            email="integrado@example.com",
+            display_name="Integrado",
+            password="SenhaSegura123",
+        )
+    )
+
+    assert calls == ["user_create", "set_password", "create_session"]
+
+
+def test_accept_rolls_back_when_user_creation_fails(monkeypatch, database, invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+
+    def fail_create(session, data):
+        raise RuntimeError("falha simulada de usuario")
+
+    monkeypatch.setattr(invite_service.user_service, "create_in_session", fail_create)
+
+    with pytest.raises(RuntimeError, match="falha simulada"):
+        invite_service.accept_invite(
+            AcceptInviteRequest(
+                token=created.token,
+                username="RollbackUser",
+                email="rollback@example.com",
+                display_name="Rollback",
+                password="SenhaSegura123",
+            )
+        )
+
+    with database.session_scope() as session:
+        assert session.execute(
+            text("SELECT COUNT(*) FROM users WHERE username='rollbackuser'")
+        ).scalar_one() == 0
+        invite_row = session.get(UserInvite, created.invite.id)
+        assert invite_row.used_at is None
+
+
+def test_accept_rolls_back_when_password_creation_fails(monkeypatch, database, invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+
+    def fail_password(session, user, password):
+        raise RuntimeError("falha simulada de senha")
+
+    monkeypatch.setattr(invite_service.auth_service, "set_password_in_session", fail_password)
+
+    with pytest.raises(RuntimeError, match="falha simulada"):
+        invite_service.accept_invite(
+            AcceptInviteRequest(
+                token=created.token,
+                username="RollbackSenha",
+                email="rollbacksenha@example.com",
+                display_name="Rollback Senha",
+                password="SenhaSegura123",
+            )
+        )
+
+    with database.session_scope() as session:
+        assert session.execute(
+            text("SELECT COUNT(*) FROM users WHERE username='rollbacksenha'")
+        ).scalar_one() == 0
+        invite_row = session.get(UserInvite, created.invite.id)
+        assert invite_row.used_at is None
+
+
+def test_reuse_invite_is_rejected(invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+    data = AcceptInviteRequest(
+        token=created.token,
+        username="JogadorUm",
+        email="um@example.com",
+        display_name="Jogador Um",
+        password="SenhaSegura123",
+    )
+    invite_service.accept_invite(data)
+
+    with pytest.raises(InviteUsedError):
+        invite_service.accept_invite(
+            AcceptInviteRequest(
+                token=created.token,
+                username="JogadorDois",
+                email="dois@example.com",
+                display_name="Jogador Dois",
+                password="SenhaSegura123",
+            )
+        )
+
+
+def test_expired_invite_is_rejected(database, invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+    with database.transaction_scope() as session:
+        invite = session.get(UserInvite, created.invite.id)
+        invite.expires_at = (
+            datetime.now(timezone.utc) - timedelta(minutes=1)
+        ).replace(tzinfo=None)
+
+    with pytest.raises(InviteExpiredError):
+        invite_service.accept_invite(
+            AcceptInviteRequest(
+                token=created.token,
+                username="Expirado",
+                email="expirado@example.com",
+                display_name="Expirado",
+                password="SenhaSegura123",
+            )
+        )
+
+
+def test_revoked_invite_is_rejected(invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+    invite_service.revoke_invite(
+        created.invite.id,
+        authorized_as_administrator=True,
+    )
+
+    with pytest.raises(InviteRevokedError):
+        invite_service.accept_invite(
+            AcceptInviteRequest(
+                token=created.token,
+                username="Revogado",
+                email="revogado@example.com",
+                display_name="Revogado",
+                password="SenhaSegura123",
+            )
+        )
+
+
+def test_revoke_invite_requires_explicit_authorization(invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+    with pytest.raises(InviteUnauthorizedError):
+        invite_service.revoke_invite(
+            created.invite.id,
+            authorized_as_administrator=False,
+        )
+
+
+def test_invalid_duplicate_and_failed_acceptance_do_not_consume(invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+
+    with pytest.raises(Exception):
+        invite_service.accept_invite(
+            AcceptInviteRequest(
+                token="a" * 43,
+                username="Invalido",
+                email="invalido@example.com",
+                display_name="Invalido",
+                password="SenhaSegura123",
+            )
+        )
+
+    service = invite_service
+    with pytest.raises(Exception):
+        service.accept_invite(
+            AcceptInviteRequest(
+                token=created.token,
+                username="administrador",
+                email="novo@example.com",
+                display_name="Duplicado",
+                password="SenhaSegura123",
+            )
+        )
+
+    user, _, _ = service.accept_invite(
+        AcceptInviteRequest(
+            token=created.token,
+            username="Valido",
+            email="valido@example.com",
+            display_name="Valido",
+            password="SenhaSegura123",
+        )
+    )
+    assert user.username == "valido"
+
+
+def test_concurrent_accept_only_creates_one_user(database, invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+    second_service = InviteService(database, validity_hours=48)
+    barrier = Barrier(2)
+
+    def accept(service, username, email):
+        barrier.wait(timeout=5)
+        try:
+            return service.accept_invite(
+                AcceptInviteRequest(
+                    token=created.token,
+                    username=username,
+                    email=email,
+                    display_name="Concorrente",
+                    password="SenhaSegura123",
+                )
+            )
+        except InviteUsedError as exc:
+            return exc
+        except Exception as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(
+            accept,
+            invite_service,
+            "concorrente1",
+            "one@example.com",
+        )
+        second = executor.submit(
+            accept,
+            second_service,
+            "concorrente2",
+            "two@example.com",
+        )
+        results = [first.result(), second.result()]
+
+    successes = [result for result in results if not isinstance(result, Exception)]
+    failures = [result for result in results if isinstance(result, Exception)]
+    assert len(successes) == 1
+    assert len(failures) == 1
+    assert isinstance(failures[0], InviteUsedError)
+    assert not isinstance(failures[0], OperationalError)
+    winner = successes[0][0]
+
+    with database.session_scope() as session:
+        users_created = session.execute(
+            text("SELECT COUNT(*) FROM users")
+        ).scalar_one()
+        invite_row = session.get(UserInvite, created.invite.id)
+        session_count = session.execute(
+            text("SELECT COUNT(*) FROM user_sessions")
+        ).scalar_one()
+        invite_used_at = invite_row.used_at
+        invite_used_by = invite_row.used_by_user_id
+
+    assert users_created == 2
+    assert invite_used_at is not None
+    assert invite_used_by == winner.id
+    assert session_count == 1
+
+
+def test_accept_http_sets_session_cookie(database, invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+    app.state.database = database
+    app.state.settings = type(
+        "Settings",
+        (),
+        {
+            "environment": "test",
+            "invite_validity_hours": 48,
+            "get_trusted_origins": staticmethod(
+                lambda: (
+                    "http://127.0.0.1:8000",
+                    "http://localhost:8000",
+                )
+            ),
+        },
+    )()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/invites/accept",
+            headers={"Origin": "http://127.0.0.1:8000"},
+            json={
+                "token": created.token,
+                "username": "ViaHttp",
+                "email": "viahttp@example.com",
+                "display_name": "Via HTTP",
+                "password": "SenhaSegura123",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "mestre_session" in response.cookies
+    assert "mestre_csrf" in response.cookies
+    assert "csrf_token" in response.json()
+
+
+def test_migration_invites_upgrade_downgrade_reupgrade(tmp_path):
+    database_path = tmp_path / "invites_migration.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+
+    command.upgrade(config, "head")
+
+    connection = sqlite3.connect(database_path)
+    table_names = {
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(user_invites)").fetchall()
+    }
+    connection.close()
+
+    assert "user_invites" in table_names
+    assert "users" in table_names
+    assert "user_sessions" in table_names
+    assert "token_hash" in columns
+    assert "used_by_user_id" in columns
+
+    command.downgrade(config, "9c41d7e2a8f5")
+
+    connection = sqlite3.connect(database_path)
+    table_names = {
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    connection.close()
+    assert "user_invites" not in table_names
+
+    command.upgrade(config, "head")

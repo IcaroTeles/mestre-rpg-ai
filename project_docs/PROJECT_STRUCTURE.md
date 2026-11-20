@@ -53,6 +53,14 @@ FastAPI, Uvicorn, HTTPX, Pydantic Settings, Jinja2 e Pytest.
 - `migrations/versions/20261120_0245_auth_sessions.py`: password_hash e user_sessions.
 - `tests/test_auth.py`: senhas, login, cookies, CSRF, sessoes e migracoes.
 
+## Microetapa 2.4 - Convites
+
+- `app/core/database_models.py`: entidade `UserInvite`.
+- `app/core/invite_engine/`: schemas, repositorio e servico de convites.
+- `app/api/routes/invites.py`: aceitação pública protegida por origem.
+- `migrations/versions/20261120_0310_user_invites.py`: tabela e indices de convites.
+- `tests/test_invites.py`: criação, aceite, revogacao, concorrencia e migracao.
+
 ## Correcoes da auditoria da Microetapa 2.2
 
 - `migrations/versions/20261120_0235_case_insensitive_users.py`: converte unicidade para indices funcionais de LOWER.

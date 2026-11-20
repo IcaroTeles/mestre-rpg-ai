@@ -85,6 +85,14 @@ Nesta versao nao existem tabelas de usuarios, campanhas ou permissoes.
 - Operacoes autenticadas de logout exigem `X-CSRF-Token`.
 - Rate limiting persistente nao esta implementado; nao exponha o login publicamente sem essa protecao.
 
+## Convites da Microetapa 2.4
+
+- Convites de uso unico sao gerados pela camada interna.
+- A aceitação publica ocorre em `POST /api/invites/accept`.
+- Tokens sao aleatorios de 256 bits e armazenados apenas como SHA-256.
+- Não existe interface administrativa ou envio automatico nesta etapa.
+- A exposição publica de aceitação exige rate limiting persistente antes de uso externo.
+
 ## Gerenciamento interno de usuarios
 
 A Microetapa 2.2 implementa modelo, schemas, repository e service para usuarios.

@@ -191,7 +191,6 @@
 ## Microetapa 2.3 - Autenticacao e sessoes
 
 - **Data:** 2026-11-20
-- **Status:** EM ANDAMENTO
 - **Status:** PRONTO PARA AUDITORIA
 - **Branch:** microetapa-2.3
 - **Baseline:** v0.1 em 9535c1443ea438981829f07f769be6b9ecdd04fc ou descendente autorizado.
@@ -272,3 +271,56 @@
 - Bancos ja existentes aplicam a revisao corretiva sem alterar dados.
 - Dados conflitantes fazem a conversao falhar antes da substituicao dos indices e sem apagar registros.
 - Testes cobrem upgrade intermediario, preservacao de dados, indices funcionais, downgrade/reupgrade e falha segura.
+
+## Microetapa 2.4 - Convites individuais
+
+- **Data:** 2026-11-20
+- **Branch:** microetapa-2.4
+- **Status:** PRONTO PARA AUDITORIA
+- **Baseline:** v0.1 em f1c6084ac1d03ee85980aa6d1c44a7add9b8e228
+
+### Implementacao
+
+- Criado modelo `UserInvite` com token hash, validade, estados, criador e usuario utilizado.
+- Criado campo opcional `campaign_id` sem chave estrangeira ou tabela de campanha.
+- Criado motor interno de convites com criação, consulta, revogação e aceite.
+- Aceite cria usuário, define senha Argon2id e consume o convite na mesma transação.
+- Adicionado endpoint publico protegido por origem `POST /api/invites/accept`.
+- Criacao e consulta administrativa permanecem fora de endpoints nesta etapa.
+
+### Configuracao
+
+- Validade padrao de convites: 48 horas por `INVITE_VALIDITY_HOURS`.
+
+### Migracao
+
+- Criada revisao 4a7c2e1d9f60, descendente de 9c41d7e2a8f5.
+- Migração cria tabela, índices e chaves estrangeiras de convite.
+
+### Pendencias
+
+- Auditoria técnica da Microetapa 2.4.
+- Microetapa 2.5 nao iniciada.
+
+## Correcoes da auditoria da Microetapa 2.4
+
+- **Data:** 2026-11-20
+- **Branch:** microetapa-2.4
+- **Status:** PRONTO PARA NOVA AUDITORIA
+- O convite passou a reutilizar UserService.create_in_session e AuthService.set_password_in_session na mesma transacao.
+- AuthService.create_session continua sendo chamado somente apos o commit do cadastro e consumo.
+- Foi incluido lock local por instancia para serializar aceitações concorrentes do mesmo processo.
+- A atualização condicional do convite continua protegendo consumo simultâneo por atualização SQL.
+- O teste de concorrência agora exige exatamente uma operação bem-sucedida e uma rejeição InviteUsedError.
+- Confirmado que o estado final possui exatamente um usuário novo, um convite utilizado e uma sessão para o vencedor.
+- Teste de integraçao valida chamadas a create_in_session, set_password_in_session e create_session.
+- Teste de concorrencia exige a segunda operação falhar especificamente com InviteUsedError.
+- Operacoes administrativas nao possuem caminhos HTTP.
+- Suíte completa corrigida: 91 testes aprovados, 0 reprovados.
+- Suíte final da correção: 93 testes aprovados, 0 reprovados.
+- Removido lock exclusivo por instancia em aceite de convites.
+- Concorrência testada com duas instancias independentes sobre a mesma base SQLite.
+- Erros inesperados de criacao ou senha agora propagam sem conversao em erro de dominio.
+- O booleano administrativo continua como confirmação interna e nao representa autorização segura por papel.
+- Endpoints administrativos continuam inexistentes.
+- Rate limiting persistente permanece pendente antes da exposição pública externa.

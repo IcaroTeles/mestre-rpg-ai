@@ -65,3 +65,14 @@ A aplicacao utiliza FastAPI com lifespan, configuracao centralizada, cliente Oll
 - Operacoes sensiveis exigem Origin ou Referer confiavel configurado por `TRUSTED_ORIGINS`.
 - Login inexistente usa verificacao Argon2 ficticia para reduzir diferenca temporal.
 - Login publicamente exposto na rota HTTP existe somente para contas provisionadas internamente; nao existe cadastro publico nesta etapa.
+
+## Microetapa 2.4 - Convites
+
+- Convites sao individuais, de uso unico e armazenam somente o SHA-256 do token.
+- Validade padrao configuravel de 48 horas.
+- A criacao e revogacao administrativa permanecem internas; nao existe papel administrativo nesta etapa.
+- A aceitação aceita cadastro publico apenas mediante convite valido.
+- campaign_id prepara associacao futura sem criar tabela ou dependencia artificial de campanha.
+- O aceite reutiliza UserService e AuthService dentro da mesma sessao transacional.
+- O argumento booleano administrativo e apenas uma barreira interna, nao autorizacao real.
+- Limitacao persistente de tentativas no aceite publico permanece pendente antes da exposicao externa.
