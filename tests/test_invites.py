@@ -2,6 +2,7 @@
 
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -10,6 +11,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from app.core.auth_engine.auth_service import AuthService
 from app.core.database import DatabaseManager
@@ -180,6 +182,66 @@ def test_accept_invite_reuses_user_and_auth_services(monkeypatch, invite_service
     assert calls == ["user_create", "set_password", "create_session"]
 
 
+def test_accept_rolls_back_when_user_creation_fails(monkeypatch, database, invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+
+    def fail_create(session, data):
+        raise RuntimeError("falha simulada de usuario")
+
+    monkeypatch.setattr(invite_service.user_service, "create_in_session", fail_create)
+
+    with pytest.raises(RuntimeError, match="falha simulada"):
+        invite_service.accept_invite(
+            AcceptInviteRequest(
+                token=created.token,
+                username="RollbackUser",
+                email="rollback@example.com",
+                display_name="Rollback",
+                password="SenhaSegura123",
+            )
+        )
+
+    with database.session_scope() as session:
+        assert session.execute(
+            text("SELECT COUNT(*) FROM users WHERE username='rollbackuser'")
+        ).scalar_one() == 0
+        invite_row = session.get(UserInvite, created.invite.id)
+        assert invite_row.used_at is None
+
+
+def test_accept_rolls_back_when_password_creation_fails(monkeypatch, database, invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+
+    def fail_password(session, user, password):
+        raise RuntimeError("falha simulada de senha")
+
+    monkeypatch.setattr(invite_service.auth_service, "set_password_in_session", fail_password)
+
+    with pytest.raises(RuntimeError, match="falha simulada"):
+        invite_service.accept_invite(
+            AcceptInviteRequest(
+                token=created.token,
+                username="RollbackSenha",
+                email="rollbacksenha@example.com",
+                display_name="Rollback Senha",
+                password="SenhaSegura123",
+            )
+        )
+
+    with database.session_scope() as session:
+        assert session.execute(
+            text("SELECT COUNT(*) FROM users WHERE username='rollbacksenha'")
+        ).scalar_one() == 0
+        invite_row = session.get(UserInvite, created.invite.id)
+        assert invite_row.used_at is None
+
+
 def test_reuse_invite_is_rejected(invite_service, creator):
     created = invite_service.create_invite(
         creator.id,
@@ -309,10 +371,13 @@ def test_concurrent_accept_only_creates_one_user(database, invite_service, creat
         creator.id,
         authorized_as_administrator=True,
     )
+    second_service = InviteService(database, validity_hours=48)
+    barrier = Barrier(2)
 
-    def accept(username, email):
+    def accept(service, username, email):
+        barrier.wait(timeout=5)
         try:
-            return invite_service.accept_invite(
+            return service.accept_invite(
                 AcceptInviteRequest(
                     token=created.token,
                     username=username,
@@ -321,12 +386,24 @@ def test_concurrent_accept_only_creates_one_user(database, invite_service, creat
                     password="SenhaSegura123",
                 )
             )
+        except InviteUsedError as exc:
+            return exc
         except Exception as exc:
             return exc
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        first = executor.submit(accept, "concorrente1", "one@example.com")
-        second = executor.submit(accept, "concorrente2", "two@example.com")
+        first = executor.submit(
+            accept,
+            invite_service,
+            "concorrente1",
+            "one@example.com",
+        )
+        second = executor.submit(
+            accept,
+            second_service,
+            "concorrente2",
+            "two@example.com",
+        )
         results = [first.result(), second.result()]
 
     successes = [result for result in results if not isinstance(result, Exception)]
@@ -334,6 +411,8 @@ def test_concurrent_accept_only_creates_one_user(database, invite_service, creat
     assert len(successes) == 1
     assert len(failures) == 1
     assert isinstance(failures[0], InviteUsedError)
+    assert not isinstance(failures[0], OperationalError)
+    winner = successes[0][0]
 
     with database.session_scope() as session:
         users_created = session.execute(
@@ -348,7 +427,7 @@ def test_concurrent_accept_only_creates_one_user(database, invite_service, creat
 
     assert users_created == 2
     assert invite_used_at is not None
-    assert invite_used_by is not None
+    assert invite_used_by == winner.id
     assert session_count == 1
 
 

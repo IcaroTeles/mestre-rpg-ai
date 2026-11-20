@@ -2,14 +2,13 @@
 
 import hashlib
 import secrets
-import threading
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from pydantic import ValidationError
 from sqlalchemy import update
 
-from app.core.auth_engine.auth_service import AuthService
+from app.core.auth_engine.auth_service import AuthService, PasswordValidationError
 from app.core.database import DatabaseManager
 from app.core.database_models import User, UserInvite
 from app.core.invite_engine.invite_repository import InviteRepository
@@ -18,7 +17,11 @@ from app.core.invite_engine.invite_schemas import (
     CreatedInviteOutput,
     InviteOutput,
 )
-from app.core.user_engine.user_service import UserService
+from app.core.user_engine.user_service import (
+    UserConflictError,
+    UserService,
+    UserValidationError,
+)
 from app.core.user_engine.user_schemas import UserCreate, UserOutput
 
 
@@ -61,7 +64,6 @@ class InviteService:
         self.validity_hours = validity_hours
         self.auth_service = auth_service or AuthService(database)
         self.user_service = UserService(database)
-        self._accept_lock = threading.Lock()
 
     @staticmethod
     def hash_token(token: str) -> str:
@@ -162,64 +164,63 @@ class InviteService:
         now_for_sqlite = now.replace(tzinfo=None)
         token_hash = self.hash_token(data.token)
 
-        with self._accept_lock:
-            with self.database.transaction_scope() as session:
-                invite = InviteRepository(session).get_by_token_hash(token_hash)
-                if invite is None:
-                    raise InviteInvalidError("Convite invalido")
-                if invite.revoked_at is not None:
-                    raise InviteRevokedError("Convite revogado")
-                if invite.used_at is not None:
-                    raise InviteUsedError("Convite ja utilizado")
+        with self.database.transaction_scope() as session:
+            invite = InviteRepository(session).get_by_token_hash(token_hash)
+            if invite is None:
+                raise InviteInvalidError("Convite invalido")
+            if invite.revoked_at is not None:
+                raise InviteRevokedError("Convite revogado")
+            if invite.used_at is not None:
+                raise InviteUsedError("Convite ja utilizado")
 
-                expires_at = invite.expires_at
-                if expires_at.tzinfo is None:
-                    expires_at = expires_at.replace(tzinfo=timezone.utc)
-                if expires_at <= now:
-                    raise InviteExpiredError("Convite expirado")
+            expires_at = invite.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at <= now:
+                raise InviteExpiredError("Convite expirado")
 
-                try:
-                    user = self.user_service.create_in_session(
-                        session,
-                        UserCreate(
-                            username=data.username,
-                            email=data.email,
-                            display_name=data.display_name,
-                        ),
-                    )
-                except Exception as exc:
-                    if hasattr(exc, "args"):
-                        raise InviteInvalidError("Dados de cadastro invalidos") from exc
-                    raise
-
-                try:
-                    self.auth_service.set_password_in_session(
-                        session,
-                        user,
-                        data.password,
-                    )
-                    session.flush()
-                except Exception as exc:
-                    raise InviteInvalidError("Dados de cadastro invalidos") from exc
-
-                result = session.execute(
-                    update(UserInvite)
-                    .where(
-                        UserInvite.id == invite.id,
-                        UserInvite.used_at.is_(None),
-                        UserInvite.revoked_at.is_(None),
-                        UserInvite.expires_at > now_for_sqlite,
-                    )
-                    .values(
-                        used_at=now,
-                        used_by_user_id=user.id,
-                    )
+            try:
+                user = self.user_service.create_in_session(
+                    session,
+                    UserCreate(
+                        username=data.username,
+                        email=data.email,
+                        display_name=data.display_name,
+                    ),
                 )
-                if result.rowcount != 1:
-                    raise InviteUsedError("Convite ja utilizado")
+            except UserValidationError as exc:
+                raise InviteValidationError("Dados de cadastro invalidos") from exc
+            except UserConflictError as exc:
+                raise InviteInvalidError("Dados de cadastro invalidos") from exc
 
+            try:
+                self.auth_service.set_password_in_session(
+                    session,
+                    user,
+                    data.password,
+                )
                 session.flush()
-                output = UserOutput.model_validate(user)
+            except PasswordValidationError as exc:
+                raise InviteValidationError("Senha invalida") from exc
+
+            result = session.execute(
+                update(UserInvite)
+                .where(
+                    UserInvite.id == invite.id,
+                    UserInvite.used_at.is_(None),
+                    UserInvite.revoked_at.is_(None),
+                    UserInvite.expires_at > now_for_sqlite,
+                )
+                .values(
+                    used_at=now,
+                    used_by_user_id=user.id,
+                )
+            )
+            if result.rowcount != 1:
+                raise InviteUsedError("Convite ja utilizado")
+
+            session.flush()
+            output = UserOutput.model_validate(user)
 
         token, csrf_token, _, _ = self.auth_service.create_session(output.id)
         return output, token, csrf_token

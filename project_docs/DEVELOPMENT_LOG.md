@@ -317,6 +317,10 @@
 - Teste de concorrencia exige a segunda operação falhar especificamente com InviteUsedError.
 - Operacoes administrativas nao possuem caminhos HTTP.
 - Suíte completa corrigida: 91 testes aprovados, 0 reprovados.
+- Suíte final da correção: 93 testes aprovados, 0 reprovados.
+- Removido lock exclusivo por instancia em aceite de convites.
+- Concorrência testada com duas instancias independentes sobre a mesma base SQLite.
+- Erros inesperados de criacao ou senha agora propagam sem conversao em erro de dominio.
 - O booleano administrativo continua como confirmação interna e nao representa autorização segura por papel.
 - Endpoints administrativos continuam inexistentes.
 - Rate limiting persistente permanece pendente antes da exposição pública externa.
