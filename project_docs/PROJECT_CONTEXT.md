@@ -76,3 +76,17 @@ A aplicacao utiliza FastAPI com lifespan, configuracao centralizada, cliente Oll
 - O aceite reutiliza UserService e AuthService dentro da mesma sessao transacional.
 - O argumento booleano administrativo e apenas uma barreira interna, nao autorizacao real.
 - Limitacao persistente de tentativas no aceite publico permanece pendente antes da exposicao externa.
+
+## Microetapa 2.5.1 - Estrutura fundamental de campanhas
+
+- `Campaign` armazena nome, descricao, Owner por chave estrangeira, estado, classificacao de duracao, duracao planejada da sessao, frequencia e datas de inicio/conclusao prevista.
+- O estado inicial e `PREPARATION`; as transicoes do Owner sao inicio, pausa, retomada, encerramento e reabertura explicita de `ENDED` para `PREPARATION`.
+- A reabertura e uma acao explicita do Owner e gera evento de auditoria. Campanhas encerradas sao preservadas e nao podem ser editadas ate serem reabertas.
+- Criacao exige usuario existente e ativo. A identidade do Owner vem da sessao autenticada; endpoints mutaveis tambem verificam Origin/Referer e CSRF.
+- A classificacao e `ONE_SHOT`, `SHORT`, `MEDIUM` ou `LONG`; a frequencia e `WEEKLY`, `BIWEEKLY`, `MONTHLY` ou `IRREGULAR`.
+- A duracao planejada da sessao e persistida em minutos, limitada a 120-240, com padrao de 180 minutos. Duracao real nao e calculada porque ainda nao existem sessoes persistidas.
+- Como nao havia infraestrutura de auditoria, foi criada a tabela de dominio `campaign_audit_events`; criacao, atualizacoes relevantes, transicoes e reabertura sao registradas na mesma transacao da alteracao.
+- Tentativas de operacoes por nao-Owners sao registradas no logger `mestre_rpg` e rejeitadas pelo service.
+- O limite tecnico total opcional e configuravel por `CAMPAIGN_MAX_TOTAL`; sem configuracao nao ha limite numerico. Nao foi criado painel, papel ou endpoint ADM nesta microetapa.
+- `UserInvite.campaign_id` permanece opcional sem chave estrangeira, preservando convites antigos e adiando a associacao referencial para a microetapa de participantes.
+- A API adiciona rotas autenticadas de criacao, consulta, edicao, transicao e consulta de auditoria. Nao adiciona participantes, sessoes, personagens, integracao narrativa ou exclusao de campanhas.

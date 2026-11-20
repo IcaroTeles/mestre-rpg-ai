@@ -6,7 +6,14 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.config import get_settings
-from app.core.database_models import Base, User, UserSession, UserInvite  # noqa: F401
+from app.core.database_models import (  # noqa: F401
+    Base,
+    Campaign,
+    CampaignAuditEvent,
+    User,
+    UserInvite,
+    UserSession,
+)
 
 config = context.config
 if config.config_file_name is not None:

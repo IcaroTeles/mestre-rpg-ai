@@ -67,3 +67,15 @@ FastAPI, Uvicorn, HTTPX, Pydantic Settings, Jinja2 e Pytest.
 - `tests/test_users.py`: fixture usa Alembic e inclui insercoes SQLite case-insensitive.
 
 Nenhuma dependencia nova foi necessaria; Pydantic existente valida o formato basico de e-mail.
+
+## Microetapa 2.5.1 - Campanhas
+
+- `app/core/campaign_engine/campaign_types.py`: estados, classificacoes de duracao e frequencias.
+- `app/core/campaign_engine/campaign_schemas.py`: validacao e serializacao de campanhas e eventos de auditoria.
+- `app/core/campaign_engine/campaign_repository.py`: consultas e persistencia SQLAlchemy.
+- `app/core/campaign_engine/campaign_service.py`: criacao, propriedade, atualizacao, auditoria e transicoes.
+- `app/core/database_models.py`: modelos `Campaign` e `CampaignAuditEvent`; `UserInvite.campaign_id` continua sem FK.
+- `app/api/routes/campaigns.py`: rotas autenticadas `/api/campaigns`; escritas exigem origem confiavel e CSRF.
+- `app/core/auth_engine/auth_dependencies.py`: verificacoes compartilhadas de origem e CSRF, usadas pelas rotas de campanha.
+- `migrations/versions/20261120_0445_campaign_foundation.py`: tabelas, constraints, FKs e indices de campanhas/auditoria.
+- `tests/test_campaigns.py`: regras, autenticacao, transicoes, auditoria, integridade e round-trip de migracao.

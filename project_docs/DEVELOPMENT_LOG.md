@@ -324,3 +324,44 @@
 - O booleano administrativo continua como confirmação interna e nao representa autorização segura por papel.
 - Endpoints administrativos continuam inexistentes.
 - Rate limiting persistente permanece pendente antes da exposição pública externa.
+
+## Microetapa 2.5.1 - Estrutura fundamental de campanhas
+
+- **Data:** 2026-11-20
+- **Branch:** `microetapa-2.5.1`
+- **Baseline:** `origin/v0.1` em `b21962ea92b71ac81e85fffef7224ced7d182ba0`, incluindo a integracao da Microetapa 2.4.
+- **Status:** PRONTO PARA AUDITORIA; nao representa aprovacao formal.
+
+### Implementacao
+
+- Criados os modelos SQLAlchemy `Campaign` e `CampaignAuditEvent`, com UUIDs, timestamps, Owner referenciado por FK, estados, classificacao, frequencia e datas.
+- Criados repository, service, schemas e rotas autenticadas para criar/listar/consultar/editar campanhas, controlar transicoes e consultar a auditoria do Owner.
+- O Owner e sempre derivado da identidade autenticada. Escritas exigem origem confiavel e CSRF.
+- Rotas: `GET/POST /api/campaigns`, `GET/PATCH /api/campaigns/{id}`, `POST /api/campaigns/{id}/{start,pause,resume,end,reopen}` e `GET /api/campaigns/{id}/audit`.
+- O estado inicial e `PREPARATION`; o Owner pode iniciar, pausar, retomar, encerrar e explicitamente reabrir uma campanha encerrada para `PREPARATION`.
+- Campanhas encerradas permanecem consultaveis e preservadas; nao existe rota de exclusao.
+- A classificacao de duracao pode ser alterada enquanto a campanha nao estiver encerrada. A sessao planejada aceita 120 a 240 minutos e tem padrao de 180 minutos.
+- Eventos de criacao, atualizacao, classificacao e transicao sao gravados atomicamente com a alteracao. Operacoes nao autorizadas sao rejeitadas e registradas pelo logger existente.
+- O limite global opcional e configuravel pela variavel `CAMPAIGN_MAX_TOTAL`; o padrao e sem limite. Como nao existe infraestrutura ADM, nao foi adicionado painel nem permissao administrativa.
+- A duracao real nao e calculada sem dados de sessoes. `UserInvite.campaign_id` permanece nullable e sem FK nesta etapa.
+
+### Migracao
+
+- Nova revisao `5f3a9d8c1b42`, descendente de `4a7c2e1d9f60`.
+- Upgrade, downgrade para a revisao anterior e reupgrade foram exercitados em banco temporario.
+- A validacao preserva a tabela e o convite preexistente com `campaign_id=NULL`; a migracao nao altera revisoes historicas.
+
+### Validacao
+
+- Testes focalizados de campanhas: 21 aprovados.
+- Suíte completa: 114 testes aprovados, 0 reprovados.
+- Cobertura nova inclui criacao autenticada e Owner atribuido pelo backend, Owner inexistente/inativo, transicoes validas/invalidas, autorizacao, reabertura auditada, preservacao de encerradas, classificacao, datas/duracao, FKs, limite opcional, CSRF, rollback em falha de auditoria e compatibilidade de convites/migracao.
+- A suíte exibiu um aviso de deprecacao do `starlette.testclient` sobre o uso de `httpx`; nao houve falha associada.
+- As requisicoes de diagnostico do Pylance expiraram; a sintaxe e o comportamento foram validados pela execucao da suíte Python.
+
+### Decisoes e limites
+
+- Como nao havia servico de auditoria, foi adicionada uma tabela de eventos especifica de campanhas, nao um framework generico.
+- A reabertura foi implementada explicitamente como `ENDED` -> `PREPARATION`, conforme a regra de reabertura pelo Owner, e gera evento `reopened`.
+- O limite global configuravel e opcional e nao introduz quota por usuario. A configuracao administrativa em interface segue fora do escopo.
+- Participantes, sessoes, personagens, permissao administrativa, IA narrativa, exclusao fisica e rate limiting persistente nao foram implementados.

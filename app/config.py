@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     session_duration_hours: int = Field(default=12, ge=1, le=24 * 30)
     trusted_origins: str = ""
     invite_validity_hours: int = Field(default=48, ge=1, le=24 * 30)
+    campaign_max_total: int | None = Field(default=None, ge=1)
 
     def get_trusted_origins(self) -> tuple[str, ...]:
         configured = [

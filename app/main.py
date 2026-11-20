@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.core.ai_engine.ollama_client import OllamaClient
 from app.core.database import DatabaseManager
 from app.api.routes.auth import router as auth_router
+from app.api.routes.campaigns import router as campaigns_router
 from app.api.routes.invites import router as invites_router
 
 
@@ -61,6 +62,7 @@ app.state.database = database
 app.state.settings = settings
 app.include_router(auth_router)
 app.include_router(invites_router)
+app.include_router(campaigns_router)
 
 frontend_dir = Path(__file__).resolve().parent / "frontend"
 templates = Jinja2Templates(directory=str(frontend_dir / "templates"))

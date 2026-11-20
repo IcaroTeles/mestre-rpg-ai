@@ -1,9 +1,12 @@
 """Endpoints internos de autenticacao por sessao persistente."""
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response
-from urllib.parse import urlsplit
 
-from app.core.auth_engine.auth_dependencies import get_authenticated_user, get_auth_service
+from app.core.auth_engine.auth_dependencies import (
+    get_authenticated_user,
+    get_auth_service,
+    validate_origin,
+)
 from app.core.auth_engine.auth_schemas import AuthUser, LoginRequest, LoginResponse, SessionIdentity
 from app.core.auth_engine.auth_service import (
     AuthService,
@@ -14,29 +17,6 @@ from app.core.auth_engine.auth_service import (
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 SESSION_COOKIE = "mestre_session"
 CSRF_COOKIE = "mestre_csrf"
-
-
-def validate_origin(request: Request) -> None:
-    settings = request.app.state.settings
-    get_trusted_origins = getattr(settings, "get_trusted_origins", None)
-    if callable(get_trusted_origins):
-        trusted_origins = get_trusted_origins()
-    else:
-        trusted_origins = (
-            "http://127.0.0.1:8000",
-            "http://localhost:8000",
-            str(request.base_url).rstrip("/"),
-        )
-    supplied = request.headers.get("origin")
-    if supplied is None:
-        referer = request.headers.get("referer")
-        if referer:
-            parsed = urlsplit(referer)
-            supplied = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
-    if not supplied:
-        raise HTTPException(status_code=403, detail="Origem nao autorizada")
-    if supplied.rstrip("/") not in trusted_origins:
-        raise HTTPException(status_code=403, detail="Origem nao autorizada")
 
 
 @router.post("/login", response_model=LoginResponse)
