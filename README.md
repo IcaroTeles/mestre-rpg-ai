@@ -7,6 +7,8 @@ Fundacao web para uma aplicacao de RPG conduzida por IA, iniciada na Etapa 1.
 ## Requisitos
 
 - Python 3.12
+- SQLAlchemy 2.x
+- Alembic
 - Ollama local opcional em `http://127.0.0.1:11434`
 - Modelo configurado: `gemma3:12b`
 
@@ -57,3 +59,21 @@ Use variaveis de ambiente ou copie `.env.example` para `.env`. Consulte tambem `
 - `OLLAMA_MODEL`
 - `OLLAMA_TIMEOUT`
 - `ENVIRONMENT`
+
+## Banco de dados
+
+A infraestrutura SQLite usa SQLAlchemy 2.x e Alembic. Por padrao, o arquivo fica em `data/mestre_rpg.db`.
+
+Para verificar o banco sem criar tabelas:
+
+```bat
+.venv\Scripts\python.exe -m alembic current
+```
+
+Nesta versao nao existem tabelas de usuarios, campanhas ou permissoes.
+
+## Semantica das sessoes
+
+- `session_scope()` e destinado a leitura e nao realiza commit.
+- `transaction_scope()` realiza commit apos sucesso e rollback apos excecao.
+- Conexoes SQLite ativam integridade de chaves estrangeiras e timeout de espera.

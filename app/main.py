@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import get_settings
 from app.core.ai_engine.ollama_client import OllamaClient
+from app.core.database import DatabaseManager
 
 
 def configure_logging(log_dir: Path) -> logging.Logger:
@@ -31,6 +32,7 @@ def configure_logging(log_dir: Path) -> logging.Logger:
 
 settings = get_settings()
 logger = configure_logging(settings.log_dir)
+database = DatabaseManager(settings.sqlalchemy_database_url)
 
 
 @asynccontextmanager
@@ -38,7 +40,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Gerencia inicializacao e encerramento controlados."""
 
     logger.info("Servidor iniciando em http://%s:%s", settings.host, settings.port)
+    if database.check_available():
+        logger.info("Banco de dados SQLite disponivel")
+    else:
+        logger.warning("Banco de dados SQLite indisponivel")
     yield
+    database.dispose()
     logger.info("Servidor encerrado")
 
 
@@ -82,12 +89,14 @@ async def index(request: Request):
 
 
 @app.get("/api/health")
-async def health() -> dict:
+def health() -> dict:
+    database_available = database.check_available()
     return {
-        "status": "ok",
+        "status": "ok" if database_available else "degraded",
         "application": settings.app_name,
         "version": settings.app_version,
         "environment": settings.environment,
+        "database": "ok" if database_available else "degraded",
     }
 
 
