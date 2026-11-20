@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from app.config import get_settings
 from app.core.ai_engine.ollama_client import OllamaClient
 from app.core.database import DatabaseManager
+from app.api.routes.auth import router as auth_router
 
 
 def configure_logging(log_dir: Path) -> logging.Logger:
@@ -33,6 +34,7 @@ def configure_logging(log_dir: Path) -> logging.Logger:
 settings = get_settings()
 logger = configure_logging(settings.log_dir)
 database = DatabaseManager(settings.sqlalchemy_database_url)
+app_state_settings = settings
 
 
 @asynccontextmanager
@@ -54,6 +56,9 @@ app = FastAPI(
     version=settings.app_version,
     lifespan=lifespan,
 )
+app.state.database = database
+app.state.settings = settings
+app.include_router(auth_router)
 
 frontend_dir = Path(__file__).resolve().parent / "frontend"
 templates = Jinja2Templates(directory=str(frontend_dir / "templates"))

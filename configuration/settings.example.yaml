@@ -14,3 +14,5 @@ database:
   url: null
   directory: data
   filename: mestre_rpg.db
+  session_duration_hours: 12
+  trusted_origins: []

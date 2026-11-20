@@ -78,6 +78,13 @@ Nesta versao nao existem tabelas de usuarios, campanhas ou permissoes.
 - `transaction_scope()` realiza commit apos sucesso e rollback apos excecao.
 - Conexoes SQLite ativam integridade de chaves estrangeiras e timeout de espera.
 
+## Autenticacao da Microetapa 2.3
+
+- Senhas usam Argon2id por meio de `pwdlib[argon2]`.
+- Sessoes persistem no SQLite e usam cookies HttpOnly.
+- Operacoes autenticadas de logout exigem `X-CSRF-Token`.
+- Rate limiting persistente nao esta implementado; nao exponha o login publicamente sem essa protecao.
+
 ## Gerenciamento interno de usuarios
 
 A Microetapa 2.2 implementa modelo, schemas, repository e service para usuarios.
