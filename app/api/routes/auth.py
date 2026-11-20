@@ -17,12 +17,25 @@ CSRF_COOKIE = "mestre_csrf"
 
 
 def validate_origin(request: Request) -> None:
-    expected = str(request.base_url).rstrip("/")
+    settings = request.app.state.settings
+    get_trusted_origins = getattr(settings, "get_trusted_origins", None)
+    if callable(get_trusted_origins):
+        trusted_origins = get_trusted_origins()
+    else:
+        trusted_origins = (
+            "http://127.0.0.1:8000",
+            "http://localhost:8000",
+            str(request.base_url).rstrip("/"),
+        )
     supplied = request.headers.get("origin")
     if supplied is None:
         referer = request.headers.get("referer")
-        supplied = f"{urlsplit(referer).scheme}://{urlsplit(referer).netloc}" if referer else None
-    if supplied is not None and supplied.rstrip("/") != expected:
+        if referer:
+            parsed = urlsplit(referer)
+            supplied = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    if not supplied:
+        raise HTTPException(status_code=403, detail="Origem nao autorizada")
+    if supplied.rstrip("/") not in trusted_origins:
         raise HTTPException(status_code=403, detail="Origem nao autorizada")
 
 

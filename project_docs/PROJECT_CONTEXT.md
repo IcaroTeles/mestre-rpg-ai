@@ -62,4 +62,6 @@ A aplicacao utiliza FastAPI com lifespan, configuracao centralizada, cliente Oll
 - O prazo absoluto de sessao e configuravel por `SESSION_DURATION_HOURS`.
 - Cookies usam `mestre_session` com HttpOnly, SameSite=Lax e Secure em producao.
 - CSRF usa token independente enviado em `X-CSRF-Token` e hash persistido na sessao.
+- Operacoes sensiveis exigem Origin ou Referer confiavel configurado por `TRUSTED_ORIGINS`.
+- Login inexistente usa verificacao Argon2 ficticia para reduzir diferenca temporal.
 - Login publicamente exposto na rota HTTP existe somente para contas provisionadas internamente; nao existe cadastro publico nesta etapa.

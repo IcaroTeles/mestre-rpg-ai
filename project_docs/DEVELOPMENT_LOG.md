@@ -218,11 +218,18 @@
 
 ### Validacao final
 
-- Suíte completa: 74 testes aprovados, 0 reprovados.
+- Suíte completa: 76 testes aprovados, 0 reprovados.
 - Upgrade head, downgrade para 8e1a4b2c53d7 e reupgrade head aprovados em banco temporario.
 - Servidor iniciado em 127.0.0.1:8000.
 - `/`, `/api/health` e `/api/health/ollama` responderam corretamente.
 - Rate limiting persistente ficou registrado como limitacao para exposicao publica.
+
+### Correcoes da auditoria preliminar
+
+- `test_migration_auth_upgrade_downgrade_reupgrade` agora executa upgrade head, downgrade para 8e1a4b2c53d7 e reupgrade head, validando tabelas e colunas.
+- `validate_origin()` rejeita ausencia simultanea de Origin e Referer e valida origens confiaveis configuradas.
+- Desenvolvimento local aceita origens locais padrao; producao exige `TRUSTED_ORIGINS`.
+- Login de conta inexistente ou sem senha executa verificacao Argon2 ficticia para reduzir diferencas temporais.
 
 ## Correcoes apos auditoria da Microetapa 2.2
 

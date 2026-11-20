@@ -98,6 +98,12 @@ def test_login_failures_are_generic(auth, user):
         auth.authenticate("mestreteste", "SenhaIncorreta")
 
 
+def test_missing_account_uses_dummy_argon2_verification(auth):
+    assert auth.dummy_password_hash.startswith("$argon2")
+    with pytest.raises(InvalidCredentialsError):
+        auth.authenticate("conta-inexistente", "SenhaSegura123")
+
+
 def test_login_without_password(auth, user):
     with pytest.raises(InvalidCredentialsError):
         auth.authenticate("mestreteste", "SenhaSegura123")
@@ -193,6 +199,7 @@ def test_login_http_sets_secure_cookie(database, auth, user):
         response = client.post(
             "/api/auth/login",
             json={"username_or_email": "mestreteste", "password": "SenhaSegura123"},
+            headers={"Origin": "http://127.0.0.1:8000"},
         )
 
     assert response.status_code == 200
@@ -211,9 +218,36 @@ def test_login_http_generic_failure(database, auth, user):
         response = client.post(
             "/api/auth/login",
             json={"username_or_email": "inexistente", "password": "SenhaSegura123"},
+            headers={"Origin": "http://127.0.0.1:8000"},
         )
     assert response.status_code == 401
     assert response.json() == {"detail": "Credenciais invalidas"}
+
+
+def test_login_http_rejects_missing_external_and_invalid_referer(database, auth, user):
+    auth.set_password(user.id, "SenhaSegura123")
+    app.state.database = database
+    app.state.settings = type("Settings", (), {"environment": "test"})()
+
+    with TestClient(app) as client:
+        missing = client.post(
+            "/api/auth/login",
+            json={"username_or_email": "mestreteste", "password": "SenhaSegura123"},
+        )
+        external = client.post(
+            "/api/auth/login",
+            json={"username_or_email": "mestreteste", "password": "SenhaSegura123"},
+            headers={"Origin": "https://externo.example"},
+        )
+        invalid_referer = client.post(
+            "/api/auth/login",
+            json={"username_or_email": "mestreteste", "password": "SenhaSegura123"},
+            headers={"Referer": "https://externo.example/pagina"},
+        )
+
+    assert missing.status_code == 403
+    assert external.status_code == 403
+    assert invalid_referer.status_code == 403
 
 
 def test_login_http_secure_cookie_in_production(database, auth, user):
@@ -225,6 +259,7 @@ def test_login_http_secure_cookie_in_production(database, auth, user):
         response = client.post(
             "/api/auth/login",
             json={"username_or_email": "mestreteste", "password": "SenhaSegura123"},
+            headers={"Origin": "https://mestre.local"},
         )
 
     assert response.status_code == 200
@@ -241,6 +276,7 @@ def test_me_logout_csrf_and_origin(database, auth, user):
         login = client.post(
             "/api/auth/login",
             json={"username_or_email": "mestreteste", "password": "SenhaSegura123"},
+            headers={"Origin": "http://127.0.0.1:8000"},
         )
         csrf = login.json()["csrf_token"]
 
@@ -251,7 +287,7 @@ def test_me_logout_csrf_and_origin(database, auth, user):
 
         bad = client.post(
             "/api/auth/logout",
-            headers={"X-CSRF-Token": "invalido"},
+            headers={"X-CSRF-Token": "invalido", "Origin": "http://127.0.0.1:8000"},
         )
         assert bad.status_code == 403
 
@@ -261,9 +297,24 @@ def test_me_logout_csrf_and_origin(database, auth, user):
         )
         assert external.status_code == 403
 
-        logout = client.post(
+        missing_origin = client.post(
             "/api/auth/logout",
             headers={"X-CSRF-Token": csrf},
+        )
+        assert missing_origin.status_code == 403
+
+        invalid_referer = client.post(
+            "/api/auth/logout",
+            headers={
+                "X-CSRF-Token": csrf,
+                "Referer": "https://externo.example/pagina",
+            },
+        )
+        assert invalid_referer.status_code == 403
+
+        logout = client.post(
+            "/api/auth/logout",
+            headers={"X-CSRF-Token": csrf, "Origin": "http://127.0.0.1:8000"},
         )
         assert logout.status_code == 200
         assert logout.json() == {"status": "logged_out"}
@@ -278,6 +329,57 @@ def test_migration_auth_upgrade_downgrade_reupgrade(tmp_path):
     config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
 
     command.upgrade(config, "head")
+
+    connection = sqlite3.connect(database_path)
+    table_names = {
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(users)").fetchall()
+    }
+    connection.close()
+    assert "users" in table_names
+    assert "user_sessions" in table_names
+    assert "password_hash" in columns
+
+    command.downgrade(config, "8e1a4b2c53d7")
+
+    connection = sqlite3.connect(database_path)
+    table_names = {
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(users)").fetchall()
+    }
+    connection.close()
+    assert "user_sessions" not in table_names
+    assert "password_hash" not in columns
+
+    command.upgrade(config, "head")
+
+    connection = sqlite3.connect(database_path)
+    table_names = {
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    columns = {
+        row[1]
+        for row in connection.execute("PRAGMA table_info(users)").fetchall()
+    }
+    connection.close()
+    assert "users" in table_names
+    assert "user_sessions" in table_names
+    assert "password_hash" in columns
 
 
 def test_migration_auth_preserves_existing_user(tmp_path):

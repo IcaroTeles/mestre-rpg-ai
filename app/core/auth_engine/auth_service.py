@@ -41,6 +41,9 @@ class AuthService:
         self.database = database
         self.session_duration_hours = session_duration_hours
         self.password_hasher = PasswordHash.recommended()
+        self.dummy_password_hash = self.password_hasher.hash(
+            "Dummy-Argon2-Password-For-Timing-Only-2.3"
+        )
 
     @staticmethod
     def _hash_token(token: str) -> str:
@@ -75,6 +78,7 @@ class AuthService:
         with self.database.transaction_scope() as session:
             user = AuthRepository(session).get_user_by_username_or_email(username_or_email)
             if user is None or not user.is_active or not user.password_hash:
+                self.password_hasher.verify(password, self.dummy_password_hash)
                 raise InvalidCredentialsError("Credenciais invalidas")
             try:
                 verified, updated_hash = self.password_hasher.verify_and_update(
