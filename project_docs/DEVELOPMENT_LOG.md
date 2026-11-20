@@ -147,5 +147,4 @@
 
 - Auditoria realizada na branch `microetapa-2.1`.
 - Nenhum comando destrutivo ou force push utilizado.
-- Branch destino solicitada `V.01` nao existe localmente nem no remoto neste momento.
-- Merge ainda nao realizado ate decisao sobre a criacao ou nome correto da baseline destino.
+- A branch destino correta foi confirmada como `v0.1`; nao existe branch `V.01`.
