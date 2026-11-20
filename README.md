@@ -77,3 +77,8 @@ Nesta versao nao existem tabelas de usuarios, campanhas ou permissoes.
 - `session_scope()` e destinado a leitura e nao realiza commit.
 - `transaction_scope()` realiza commit apos sucesso e rollback apos excecao.
 - Conexoes SQLite ativam integridade de chaves estrangeiras e timeout de espera.
+
+## Gerenciamento interno de usuarios
+
+A Microetapa 2.2 implementa modelo, schemas, repository e service para usuarios.
+Nao existem rotas HTTP, login, senha ou autenticacao nesta etapa.

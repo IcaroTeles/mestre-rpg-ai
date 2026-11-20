@@ -151,3 +151,39 @@
 - Commit de origem da Microetapa 2.1: `1eba1fc`.
 - Commit final da auditoria antes do merge: `fda2d07`.
 - Integracao validada em `v0.1` pelo commit de merge `b8a0fe2`.
+
+## Microetapa 2.2 - Cadastro e gerenciamento interno de usuarios
+
+- **Data:** 2026-11-20
+- **Branch:** `microetapa-2.2`
+- **Status:** PRONTO PARA AUDITORIA
+- **Objetivos:** implementar modelo, schemas, repository, service, migracao e testes de usuarios sem HTTP ou autenticacao.
+
+### Implementacao
+
+- Criado `app/core/user_engine/` com schemas, repository e service.
+- Adicionado modelo SQLAlchemy `User` reutilizando `Base`.
+- Campos incluem UUID, username, email, display_name, is_active, created_at e updated_at.
+- Username e email sao normalizados em minusculas.
+- Criada validacao para tamanhos e caracteres permitidos.
+- Criada migracao Alembic `7dce4f9a21b1` para a tabela users.
+- Service oferece criar, buscar, listar, atualizar, desativar e reativar usuarios.
+
+### Dependencias
+
+- Nenhuma dependencia nova; Pydantic existente faz a validacao basica de e-mail.
+
+### Validacao
+
+- Suíte completa inicial: 46 testes aprovados, 0 reprovados.
+- Cobertos: validacoes, normalizacao, duplicidade, buscas, paginacao, atualizacao, estados, persistencia, rollback e migracao.
+- Testes da Etapa 1 e das Microetapas 2.1 e 2.2 integrados na mesma suite.
+- Servidor iniciado em `127.0.0.1:8000`; `/`, `/api/health` e `/api/health/ollama` responderam corretamente.
+- Nenhuma dependencia externa nova foi necessaria.
+
+### Pendencias
+
+- Revisao final de imports e diff.
+- Inicializacao real do servidor e rotas existentes.
+- Publicacao da branch microetapa-2.2.
+- Microetapa 2.3 nao iniciada.
