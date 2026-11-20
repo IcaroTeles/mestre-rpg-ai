@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     database_dir: Path = PROJECT_ROOT / "data"
     database_filename: str = "mestre_rpg.db"
     database_url: str | None = None
+    session_duration_hours: int = Field(default=12, ge=1, le=24 * 30)
 
     @property
     def ollama_api_url(self) -> str:

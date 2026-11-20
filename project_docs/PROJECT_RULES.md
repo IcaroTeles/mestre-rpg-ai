@@ -22,3 +22,7 @@
 20. Exclusao fisica de usuarios nao sera implementada nesta microetapa.
 21. Operacoes administrativas de usuario nao serao expostas por HTTP antes da autenticacao.
 22. Username e email devem ter unicidade case-insensitive garantida tambem pelo banco.
+23. Senhas nunca serao armazenadas ou registradas em texto puro.
+24. Tokens de sessao serao armazenados somente como hash e entregues por cookie HttpOnly.
+25. Operacoes de estado autenticadas exigirao CSRF e validacao de origem.
+26. Login nao fara enumeração de contas ou exposicao de detalhes criptograficos.

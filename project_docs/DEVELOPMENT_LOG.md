@@ -188,6 +188,42 @@
 - Publicacao da branch microetapa-2.2.
 - Microetapa 2.3 nao iniciada.
 
+## Microetapa 2.3 - Autenticacao e sessoes
+
+- **Data:** 2026-11-20
+- **Status:** EM ANDAMENTO
+- **Status:** PRONTO PARA AUDITORIA
+- **Branch:** microetapa-2.3
+- **Baseline:** v0.1 em 9535c1443ea438981829f07f769be6b9ecdd04fc ou descendente autorizado.
+
+### Implementacao
+
+- Senhas Argon2id via pwdlib.
+- Modelo User recebeu password_hash nullable.
+- Criada entidade UserSession com token_hash e csrf_token_hash.
+- Implementados auth repository, service, schemas e dependencias.
+- Implementados POST /api/auth/login, GET /api/auth/me e POST /api/auth/logout.
+- Cookie mestre_session usa atributos HttpOnly, SameSite=Lax e Secure fora do ambiente local.
+- CSRF exige X-CSRF-Token e valida origin para operacoes de estado.
+
+### Limites conhecidos
+
+- Rate limiting persistente nao foi implementado nesta etapa.
+- Conta provisionamento publico nao foi implementado.
+- Exposicao publica antes da 2.4 exige implementar limitacao persistente de tentativas.
+
+### Dependencias
+
+- pwdlib[argon2] >=0.2,<1.0
+
+### Validacao final
+
+- Suíte completa: 74 testes aprovados, 0 reprovados.
+- Upgrade head, downgrade para 8e1a4b2c53d7 e reupgrade head aprovados em banco temporario.
+- Servidor iniciado em 127.0.0.1:8000.
+- `/`, `/api/health` e `/api/health/ollama` responderam corretamente.
+- Rate limiting persistente ficou registrado como limitacao para exposicao publica.
+
 ## Correcoes apos auditoria da Microetapa 2.2
 
 - **Data:** 2026-11-20

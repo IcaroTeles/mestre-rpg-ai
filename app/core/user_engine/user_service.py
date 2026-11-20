@@ -6,7 +6,9 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 from app.core.database import DatabaseManager
-from app.core.database_models import User
+from datetime import datetime, timezone
+
+from app.core.database_models import User, UserSession
 from app.core.user_engine.user_repository import UserRepository
 from app.core.user_engine.user_schemas import (
     UserCreate,
@@ -135,6 +137,13 @@ class UserService:
             if user is None:
                 raise UserNotFoundError("Usuario inexistente")
             user.is_active = is_active
+            if not is_active:
+                now = datetime.now(timezone.utc)
+                sessions = session.query(UserSession).filter(
+                    UserSession.user_id == user.id,
+                    UserSession.revoked_at.is_(None),
+                )
+                sessions.update({UserSession.revoked_at: now}, synchronize_session=False)
             session.flush()
             session.refresh(user)
             return UserOutput.model_validate(user)

@@ -46,6 +46,13 @@ FastAPI, Uvicorn, HTTPX, Pydantic Settings, Jinja2 e Pytest.
 - `migrations/versions/20261120_0215_create_users.py`: migracao da tabela users.
 - `tests/test_users.py`: validacoes, unicidade, persistencia, estados e migracao.
 
+## Microetapa 2.3 - Autenticacao
+
+- `app/core/auth_engine/`: hashes, repository, service, schemas e dependencias.
+- `app/api/routes/auth.py`: login, identificacao e logout.
+- `migrations/versions/20261120_0245_auth_sessions.py`: password_hash e user_sessions.
+- `tests/test_auth.py`: senhas, login, cookies, CSRF, sessoes e migracoes.
+
 ## Correcoes da auditoria da Microetapa 2.2
 
 - `migrations/versions/20261120_0235_case_insensitive_users.py`: converte unicidade para indices funcionais de LOWER.
