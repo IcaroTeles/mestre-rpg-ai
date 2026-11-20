@@ -301,3 +301,22 @@
 
 - Auditoria técnica da Microetapa 2.4.
 - Microetapa 2.5 nao iniciada.
+
+## Correcoes da auditoria da Microetapa 2.4
+
+- **Data:** 2026-11-20
+- **Branch:** microetapa-2.4
+- **Status:** PRONTO PARA NOVA AUDITORIA
+- O convite passou a reutilizar UserService.create_in_session e AuthService.set_password_in_session na mesma transacao.
+- AuthService.create_session continua sendo chamado somente apos o commit do cadastro e consumo.
+- Foi incluido lock local por instancia para serializar aceitações concorrentes do mesmo processo.
+- A atualização condicional do convite continua protegendo consumo simultâneo por atualização SQL.
+- O teste de concorrência agora exige exatamente uma operação bem-sucedida e uma rejeição InviteUsedError.
+- Confirmado que o estado final possui exatamente um usuário novo, um convite utilizado e uma sessão para o vencedor.
+- Teste de integraçao valida chamadas a create_in_session, set_password_in_session e create_session.
+- Teste de concorrencia exige a segunda operação falhar especificamente com InviteUsedError.
+- Operacoes administrativas nao possuem caminhos HTTP.
+- Suíte completa corrigida: 91 testes aprovados, 0 reprovados.
+- O booleano administrativo continua como confirmação interna e nao representa autorização segura por papel.
+- Endpoints administrativos continuam inexistentes.
+- Rate limiting persistente permanece pendente antes da exposição pública externa.

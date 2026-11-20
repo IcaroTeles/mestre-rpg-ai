@@ -79,6 +79,18 @@ class AuthService:
             user.password_hash = password_hash
             repository.revoke_all_user_sessions(user_id, now)
 
+    def set_password_in_session(self, session, user: User, password: str) -> None:
+        """Define o hash Argon2id usando uma sessao existente."""
+
+        if (
+            not isinstance(password, str)
+            or not password.strip()
+            or len(password) < 12
+            or len(password) > 128
+        ):
+            raise PasswordValidationError("Senha invalida")
+        user.password_hash = self.password_hasher.hash(password)
+
     def verify_password(self, password_hash: str, password: str) -> bool:
         try:
             return self.password_hasher.verify(password, password_hash)

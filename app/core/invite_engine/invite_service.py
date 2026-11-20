@@ -2,12 +2,12 @@
 
 import hashlib
 import secrets
+import threading
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from pydantic import ValidationError
 from sqlalchemy import update
-from sqlalchemy.exc import IntegrityError
 
 from app.core.auth_engine.auth_service import AuthService
 from app.core.database import DatabaseManager
@@ -18,7 +18,7 @@ from app.core.invite_engine.invite_schemas import (
     CreatedInviteOutput,
     InviteOutput,
 )
-from app.core.user_engine.user_repository import UserRepository
+from app.core.user_engine.user_service import UserService
 from app.core.user_engine.user_schemas import UserCreate, UserOutput
 
 
@@ -60,6 +60,8 @@ class InviteService:
         self.database = database
         self.validity_hours = validity_hours
         self.auth_service = auth_service or AuthService(database)
+        self.user_service = UserService(database)
+        self._accept_lock = threading.Lock()
 
     @staticmethod
     def hash_token(token: str) -> str:
@@ -71,8 +73,13 @@ class InviteService:
         authorized_as_administrator: bool = False,
         validity_hours: int | None = None,
         campaign_id: UUID | None = None,
+        *,
+        internal_authority_confirmation: bool = False,
     ) -> CreatedInviteOutput:
-        if not authorized_as_administrator:
+        if not (
+            authorized_as_administrator
+            or internal_authority_confirmation
+        ):
             raise InviteUnauthorizedError("Operacao nao autorizada")
 
         duration = validity_hours if validity_hours is not None else self.validity_hours
@@ -111,7 +118,10 @@ class InviteService:
         self,
         page: int = 1,
         page_size: int = 20,
+        authorized_as_administrator: bool = False,
     ) -> list[InviteOutput]:
+        if not authorized_as_administrator:
+            raise InviteUnauthorizedError("Operacao nao autorizada")
         if page < 1 or page_size < 1 or page_size > 100:
             raise InviteValidationError("Parametros de paginacao invalidos")
         offset = (page - 1) * page_size
@@ -119,7 +129,13 @@ class InviteService:
             invites = InviteRepository(session).list(offset, page_size)
             return [InviteOutput.model_validate(invite) for invite in invites]
 
-    def revoke_invite(self, invite_id: UUID) -> InviteOutput:
+    def revoke_invite(
+        self,
+        invite_id: UUID,
+        authorized_as_administrator: bool = False,
+    ) -> InviteOutput:
+        if not authorized_as_administrator:
+            raise InviteUnauthorizedError("Operacao nao autorizada")
         now = datetime.now(timezone.utc)
         with self.database.transaction_scope() as session:
             invite = InviteRepository(session).get_by_id(invite_id)
@@ -146,60 +162,64 @@ class InviteService:
         now_for_sqlite = now.replace(tzinfo=None)
         token_hash = self.hash_token(data.token)
 
-        with self.database.transaction_scope() as session:
-            invite = InviteRepository(session).get_by_token_hash(token_hash)
-            if invite is None:
-                raise InviteInvalidError("Convite invalido")
-            if invite.revoked_at is not None:
-                raise InviteRevokedError("Convite revogado")
-            if invite.used_at is not None:
-                raise InviteUsedError("Convite ja utilizado")
+        with self._accept_lock:
+            with self.database.transaction_scope() as session:
+                invite = InviteRepository(session).get_by_token_hash(token_hash)
+                if invite is None:
+                    raise InviteInvalidError("Convite invalido")
+                if invite.revoked_at is not None:
+                    raise InviteRevokedError("Convite revogado")
+                if invite.used_at is not None:
+                    raise InviteUsedError("Convite ja utilizado")
 
-            expires_at = invite.expires_at
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if expires_at <= now:
-                raise InviteExpiredError("Convite expirado")
+                expires_at = invite.expires_at
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if expires_at <= now:
+                    raise InviteExpiredError("Convite expirado")
 
-            user_repository = UserRepository(session)
-            if user_repository.get_by_username(data.username):
-                raise InviteInvalidError("Dados de cadastro invalidos")
-            if user_repository.get_by_email(data.email):
-                raise InviteInvalidError("Dados de cadastro invalidos")
+                try:
+                    user = self.user_service.create_in_session(
+                        session,
+                        UserCreate(
+                            username=data.username,
+                            email=data.email,
+                            display_name=data.display_name,
+                        ),
+                    )
+                except Exception as exc:
+                    if hasattr(exc, "args"):
+                        raise InviteInvalidError("Dados de cadastro invalidos") from exc
+                    raise
 
-            user = User(
-                id=uuid4(),
-                username=data.username,
-                email=data.email,
-                display_name=data.display_name,
-                is_active=True,
-            )
-            user_repository.add(user)
-            try:
+                try:
+                    self.auth_service.set_password_in_session(
+                        session,
+                        user,
+                        data.password,
+                    )
+                    session.flush()
+                except Exception as exc:
+                    raise InviteInvalidError("Dados de cadastro invalidos") from exc
+
+                result = session.execute(
+                    update(UserInvite)
+                    .where(
+                        UserInvite.id == invite.id,
+                        UserInvite.used_at.is_(None),
+                        UserInvite.revoked_at.is_(None),
+                        UserInvite.expires_at > now_for_sqlite,
+                    )
+                    .values(
+                        used_at=now,
+                        used_by_user_id=user.id,
+                    )
+                )
+                if result.rowcount != 1:
+                    raise InviteUsedError("Convite ja utilizado")
+
                 session.flush()
-            except IntegrityError as exc:
-                raise InviteInvalidError("Dados de cadastro invalidos") from exc
-
-            user.password_hash = self.auth_service.password_hasher.hash(data.password)
-
-            result = session.execute(
-                update(UserInvite)
-                .where(
-                    UserInvite.id == invite.id,
-                    UserInvite.used_at.is_(None),
-                    UserInvite.revoked_at.is_(None),
-                    UserInvite.expires_at > now_for_sqlite,
-                )
-                .values(
-                    used_at=now,
-                    used_by_user_id=user.id,
-                )
-            )
-            if result.rowcount != 1:
-                raise InviteUsedError("Convite ja utilizado")
-
-            session.flush()
-            output = UserOutput.model_validate(user)
+                output = UserOutput.model_validate(user)
 
         token, csrf_token, _, _ = self.auth_service.create_session(output.id)
         return output, token, csrf_token

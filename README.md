@@ -91,6 +91,7 @@ Nesta versao nao existem tabelas de usuarios, campanhas ou permissoes.
 - A aceitação publica ocorre em `POST /api/invites/accept`.
 - Tokens sao aleatorios de 256 bits e armazenados apenas como SHA-256.
 - Não existe interface administrativa ou envio automatico nesta etapa.
+- A exposição publica de aceitação exige rate limiting persistente antes de uso externo.
 
 ## Gerenciamento interno de usuarios
 

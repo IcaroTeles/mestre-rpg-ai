@@ -92,6 +92,18 @@ def test_create_invite_requires_explicit_authorization(invite_service, creator):
             authorized_as_administrator=False,
         )
 
+    with pytest.raises(InviteUnauthorizedError):
+        invite_service.list_invites(authorized_as_administrator=False)
+
+
+def test_admin_invite_operations_have_no_public_http_routes():
+    with TestClient(app) as client:
+        paths = set(client.get("/openapi.json").json()["paths"])
+    assert "/api/invites/accept" in paths
+    assert "/api/invites" not in paths
+    assert "/api/invites/create" not in paths
+    assert "/api/invites/revoke" not in paths
+
 
 def test_accept_invite_creates_password_user_and_session(database, invite_service, creator):
     created = invite_service.create_invite(
@@ -127,6 +139,45 @@ def test_accept_invite_creates_password_user_and_session(database, invite_servic
     assert is_active is True
     assert used_at is not None
     assert used_by_user_id == user.id
+
+
+def test_accept_invite_reuses_user_and_auth_services(monkeypatch, invite_service, creator):
+    calls = []
+    original_create = invite_service.user_service.create_in_session
+    original_password = invite_service.auth_service.set_password_in_session
+    original_session = invite_service.auth_service.create_session
+
+    def tracked_create(session, data):
+        calls.append("user_create")
+        return original_create(session, data)
+
+    def tracked_password(session, user, password):
+        calls.append("set_password")
+        return original_password(session, user, password)
+
+    def tracked_session(user_id):
+        calls.append("create_session")
+        return original_session(user_id)
+
+    monkeypatch.setattr(invite_service.user_service, "create_in_session", tracked_create)
+    monkeypatch.setattr(invite_service.auth_service, "set_password_in_session", tracked_password)
+    monkeypatch.setattr(invite_service.auth_service, "create_session", tracked_session)
+
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+    invite_service.accept_invite(
+        AcceptInviteRequest(
+            token=created.token,
+            username="ServicoIntegrado",
+            email="integrado@example.com",
+            display_name="Integrado",
+            password="SenhaSegura123",
+        )
+    )
+
+    assert calls == ["user_create", "set_password", "create_session"]
 
 
 def test_reuse_invite_is_rejected(invite_service, creator):
@@ -183,7 +234,10 @@ def test_revoked_invite_is_rejected(invite_service, creator):
         creator.id,
         authorized_as_administrator=True,
     )
-    invite_service.revoke_invite(created.invite.id)
+    invite_service.revoke_invite(
+        created.invite.id,
+        authorized_as_administrator=True,
+    )
 
     with pytest.raises(InviteRevokedError):
         invite_service.accept_invite(
@@ -194,6 +248,18 @@ def test_revoked_invite_is_rejected(invite_service, creator):
                 display_name="Revogado",
                 password="SenhaSegura123",
             )
+        )
+
+
+def test_revoke_invite_requires_explicit_authorization(invite_service, creator):
+    created = invite_service.create_invite(
+        creator.id,
+        authorized_as_administrator=True,
+    )
+    with pytest.raises(InviteUnauthorizedError):
+        invite_service.revoke_invite(
+            created.invite.id,
+            authorized_as_administrator=False,
         )
 
 
@@ -267,6 +333,23 @@ def test_concurrent_accept_only_creates_one_user(database, invite_service, creat
     failures = [result for result in results if isinstance(result, Exception)]
     assert len(successes) == 1
     assert len(failures) == 1
+    assert isinstance(failures[0], InviteUsedError)
+
+    with database.session_scope() as session:
+        users_created = session.execute(
+            text("SELECT COUNT(*) FROM users")
+        ).scalar_one()
+        invite_row = session.get(UserInvite, created.invite.id)
+        session_count = session.execute(
+            text("SELECT COUNT(*) FROM user_sessions")
+        ).scalar_one()
+        invite_used_at = invite_row.used_at
+        invite_used_by = invite_row.used_by_user_id
+
+    assert users_created == 2
+    assert invite_used_at is not None
+    assert invite_used_by is not None
+    assert session_count == 1
 
 
 def test_accept_http_sets_session_cookie(database, invite_service, creator):

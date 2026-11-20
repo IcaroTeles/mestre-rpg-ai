@@ -73,3 +73,6 @@ A aplicacao utiliza FastAPI com lifespan, configuracao centralizada, cliente Oll
 - A criacao e revogacao administrativa permanecem internas; nao existe papel administrativo nesta etapa.
 - A aceitação aceita cadastro publico apenas mediante convite valido.
 - campaign_id prepara associacao futura sem criar tabela ou dependencia artificial de campanha.
+- O aceite reutiliza UserService e AuthService dentro da mesma sessao transacional.
+- O argumento booleano administrativo e apenas uma barreira interna, nao autorizacao real.
+- Limitacao persistente de tentativas no aceite publico permanece pendente antes da exposicao externa.
