@@ -44,3 +44,13 @@ A aplicacao utiliza FastAPI com lifespan, configuracao centralizada, cliente Oll
 - A verificacao de banco da API usa uma rota sincronizada curta, sem bloquear o loop com tarefas extensas.
 - O estado geral fica degradado quando o banco obrigatorio estiver indisponivel; Ollama permanece reportado separadamente.
 - Alembic reutiliza a URL central do projeto ou uma URL temporaria fornecida pelo teste.
+
+## Microetapa 2.2 - Usuarios
+
+- E implementada uma entidade `User` com UUID, username, email, display_name, estado ativo e timestamps.
+- Username e email sao normalizados em minusculas antes da persistencia.
+- Validacoes usam Pydantic e restricoes SQLAlchemy/Alembic.
+- Repositorio, servico e schemas possuem responsabilidades separadas.
+- Desativacao e reativacao sao operacoes logicas explicitas.
+- A funcionalidade nao contem login, senha, token, convite, permissao ou rota HTTP.
+- A validacao de e-mail usa uma expressao regular basica para formato e normalizacao; nao garante conformidade RFC completa nem existencia da caixa.

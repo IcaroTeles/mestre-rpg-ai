@@ -17,3 +17,8 @@
 15. Contextos de sessao devem fechar sempre e nao devem realizar commits implicitos.
 16. Escritas devem usar um contexto transacional explicito com rollback em falha.
 17. PRAGMAS SQLite devem ser aplicados por conexao e sem alterar dados existentes.
+18. O UUID de usuario sera gerado pelo backend e nunca recebido como identificador oficial do cliente.
+19. Username e email serao normalizados antes da busca ou persistencia.
+20. Exclusao fisica de usuarios nao sera implementada nesta microetapa.
+21. Operacoes administrativas de usuario nao serao expostas por HTTP antes da autenticacao.
+22. Username e email devem ter unicidade case-insensitive garantida tambem pelo banco.

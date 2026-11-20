@@ -36,3 +36,19 @@
 SQLAlchemy 2.x e Alembic foram adicionados na Microetapa 2.1.
 
 FastAPI, Uvicorn, HTTPX, Pydantic Settings, Jinja2 e Pytest.
+
+## Microetapa 2.2 - Usuarios
+
+- `app/core/database_models.py`: modelo declarativo `User` reutilizando `Base`.
+- `app/core/user_engine/user_schemas.py`: schemas de entrada e saida.
+- `app/core/user_engine/user_repository.py`: consultas e persistencia SQLAlchemy.
+- `app/core/user_engine/user_service.py`: validacoes, duplicidade, transacoes e estados.
+- `migrations/versions/20261120_0215_create_users.py`: migracao da tabela users.
+- `tests/test_users.py`: validacoes, unicidade, persistencia, estados e migracao.
+
+## Correcoes da auditoria da Microetapa 2.2
+
+- `migrations/versions/20261120_0235_case_insensitive_users.py`: converte unicidade para indices funcionais de LOWER.
+- `tests/test_users.py`: fixture usa Alembic e inclui insercoes SQLite case-insensitive.
+
+Nenhuma dependencia nova foi necessaria; Pydantic existente valida o formato basico de e-mail.
