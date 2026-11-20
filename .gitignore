@@ -8,10 +8,15 @@ __pycache__/
 htmlcov/
 *.log
 data/logs/*
+!data/logs/.gitkeep
 data/uploads/*
+!data/uploads/.gitkeep
 data/campaigns/*
+!data/campaigns/.gitkeep
 data/knowledge_base/*
+!data/knowledge_base/.gitkeep
 backups/*
+!backups/.gitkeep
 *.sqlite
 *.sqlite3
 *.db

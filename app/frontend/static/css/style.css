@@ -1,0 +1,116 @@
+:root {
+    color-scheme: dark;
+    --ink: #e9e2d0;
+    --muted: #aaa391;
+    --gold: #c9a66b;
+    --panel: rgba(20, 22, 29, 0.96);
+    --line: rgba(201, 166, 107, 0.28);
+    --success: #74bba4;
+    --warning: #d7b568;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--ink);
+    font-family: Georgia, "Times New Roman", serif;
+    background:
+        radial-gradient(circle at 50% 10%, rgba(201, 166, 107, 0.12), transparent 28rem),
+        linear-gradient(135deg, #101218 0%, #171923 58%, #0d1117 100%);
+}
+
+.screen {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+}
+
+.panel {
+    width: min(760px, 100%);
+    text-align: center;
+    padding: clamp(28px, 7vw, 64px);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+    position: relative;
+}
+
+.panel::before, .panel::after {
+    content: "";
+    position: absolute;
+    inset: 12px;
+    border: 1px solid rgba(201, 166, 107, 0.09);
+    border-radius: 12px;
+    pointer-events: none;
+}
+
+.sigil {
+    width: 68px;
+    height: 68px;
+    margin: 0 auto 18px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--gold);
+    border-radius: 50%;
+    color: var(--gold);
+    font-size: 1.3rem;
+    letter-spacing: 0.08em;
+}
+
+.eyebrow {
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 0.72rem;
+}
+
+h1 { margin: 10px 0 8px; font-size: clamp(2.2rem, 8vw, 4.6rem); }
+.subtitle { color: var(--muted); font-size: 1.08rem; }
+
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 36px 0 26px;
+}
+
+.status-card {
+    min-height: 108px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px 10px;
+    border: 1px solid rgba(233, 226, 208, 0.11);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.status-label {
+    color: var(--muted);
+    font-family: "Segoe UI", sans-serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.status-value { color: var(--gold); font-family: "Segoe UI", sans-serif; }
+.status-value.online { color: var(--success); }
+.status-value.offline { color: #cf7d72; }
+
+.warning {
+    margin: 0;
+    color: var(--muted);
+    font-family: "Segoe UI", sans-serif;
+    font-size: 0.82rem;
+}
+
+@media (max-width: 620px) {
+    .status-grid { grid-template-columns: 1fr; }
+    .status-card { min-height: 82px; }
+}
